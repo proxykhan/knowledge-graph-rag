@@ -21,6 +21,13 @@ def test_acronym_merges_company_but_not_person():
     assert frozenset({"Jensen Huang"}) in clusters and frozenset({"JH"}) in clusters
 
 
+def test_one_word_company_joins_unique_longer_name_only():
+    clusters = _resolve({"Company": ["Samsung", "Samsung Electronics Co., Ltd.",
+                                     "Applied", "Applied Materials, Inc.", "Applied Ventures, LLC"]})
+    assert frozenset({"Samsung", "Samsung Electronics Co., Ltd."}) in clusters
+    assert frozenset({"Applied"}) in clusters  # two candidates: ambiguous, no merge
+
+
 def test_synonyms_give_stable_id():
     clusters = _resolve({"Location": ["Korea", "South Korea", "North Korea"]})
     merged = clusters[frozenset({"Korea", "South Korea"})]

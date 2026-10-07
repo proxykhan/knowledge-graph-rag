@@ -54,12 +54,16 @@ def model_name() -> str:
     return settings.gemini_model if settings.llm_provider == "gemini" else settings.claude_model
 
 
-def generate_structured(system: str, user: str, schema: type[BaseModel]) -> tuple[BaseModel, Usage]:
-    """Return a validated instance of `schema`. Raises LLMError (retryable) or QuotaExhausted."""
+def generate_structured(system: str, user: str, schema: type[BaseModel],
+                        light: bool = False) -> tuple[BaseModel, Usage]:
+    """Return a validated instance of `schema`. Raises LLMError (retryable) or QuotaExhausted.
+
+    light=True: minimal reasoning, for cheap high-volume calls such as query routing.
+    """
     if settings.llm_provider == "gemini":
-        return _gemini(system, user, schema)
+        return _gemini(system, user, schema, light)
     if settings.llm_provider == "claude":
-        return _claude(system, user, schema)
+        return _claude(system, user, schema, light)
     raise ValueError(f"Unknown LLM_PROVIDER: {settings.llm_provider!r}")
 
 
@@ -100,9 +104,10 @@ def _gemini_quota_info(err) -> tuple[bool, float, str | None]:
     return daily, float(delay.group(1)) if delay else 60.0, limit.group(1) if limit else None
 
 
-def _gemini(system: str, user: str, schema: type[BaseModel]) -> tuple[BaseModel, Usage]:
+def _gemini(system: str, user: str, schema: type[BaseModel], light: bool) -> tuple[BaseModel, Usage]:
     global _gemini_client
     from google import genai
+    import httpx  # the transport google-genai uses; its network errors are not APIErrors
     from google.genai import errors, types
 
     if _gemini_client is None:
@@ -114,7 +119,8 @@ def _gemini(system: str, user: str, schema: type[BaseModel]) -> tuple[BaseModel,
         system_instruction=system,
         response_mime_type="application/json",
         response_json_schema=schema.model_json_schema(),
-        thinking_config=types.ThinkingConfig(thinking_level=settings.gemini_thinking_level),
+        thinking_config=types.ThinkingConfig(
+            thinking_level="MINIMAL" if light else settings.gemini_thinking_level),
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS),
     )
@@ -137,6 +143,10 @@ def _gemini(system: str, user: str, schema: type[BaseModel]) -> tuple[BaseModel,
             delay = 15 * attempt
             print(f"  [server {e.code}] waiting {delay}s before retry {attempt}/{TRANSIENT_RETRIES}")
             time.sleep(delay)
+        except httpx.TransportError as e:  # connect/read timeouts, dropped connections
+            delay = 15 * attempt
+            print(f"  [network {type(e).__name__}] waiting {delay}s before retry {attempt}/{TRANSIENT_RETRIES}")
+            time.sleep(delay)
     else:
         raise LLMError("still failing after transient-error retries")
 
@@ -154,7 +164,7 @@ def _gemini(system: str, user: str, schema: type[BaseModel]) -> tuple[BaseModel,
 
 # ---------------------------------------------------------------- Claude
 
-def _claude(system: str, user: str, schema: type[BaseModel]) -> tuple[BaseModel, Usage]:
+def _claude(system: str, user: str, schema: type[BaseModel], light: bool) -> tuple[BaseModel, Usage]:
     import anthropic
 
     headers = ({"anthropic-workspace-id": settings.anthropic_workspace_id}
@@ -166,7 +176,7 @@ def _claude(system: str, user: str, schema: type[BaseModel]) -> tuple[BaseModel,
             max_tokens=16000,
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
-            output_config={"effort": "medium"},
+            output_config={"effort": "low" if light else "medium"},
             output_format=schema,
             system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user}],

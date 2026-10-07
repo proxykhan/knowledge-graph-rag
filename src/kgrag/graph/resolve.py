@@ -52,6 +52,7 @@ SYNONYMS = {
     ("Location", "peoples republic of china"): "china",
     ("Location", "mainland china"): "china",
     ("Company", "gf"): "globalfoundries",  # nickname, not an acronym of a one-word name
+    ("Company", "zt group int l"): "zt systems",  # legal name of ZT Systems
 }
 
 
@@ -134,6 +135,16 @@ def resolve(surface_counts: dict[tuple[str, str], int], model=None, report: bool
                 for long_key in acro_index.get(k, []):
                     if long_key != k and " " in long_key:
                         uf.union(idx[k], idx[long_key])
+
+        # Step 2b: a one-word company name ("samsung") joins the single longer company name
+        # starting with that word ("samsung electronics"). If two longer names share the
+        # word ("applied materials", "applied ventures") it is ambiguous and nothing merges.
+        if etype == "Company":
+            for k in uniq_keys:
+                if " " not in k and len(k) >= 3:
+                    longer = [o for o in uniq_keys if o != k and o.split()[0] == k]
+                    if len(longer) == 1:
+                        uf.union(idx[k], idx[longer[0]])
 
         # Step 4: embedding similarity + shared significant word.
         if model is not None and len(uniq_keys) > 1:

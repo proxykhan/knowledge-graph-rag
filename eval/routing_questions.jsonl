@@ -1,0 +1,24 @@
+{"id": "g01", "question": "Who makes the wafers for AMD's processors?", "route": "GRAPH", "query_type": "RELATIONS_OF"}
+{"id": "g02", "question": "Which memory vendors sell to NVIDIA?", "route": "GRAPH", "query_type": "RELATIONS_OF"}
+{"id": "g03", "question": "What companies has AMD acquired?", "route": "GRAPH", "query_type": "RELATIONS_OF"}
+{"id": "g04", "question": "Who does Intel compete with?", "route": "GRAPH", "query_type": "RELATIONS_OF"}
+{"id": "g05", "question": "Which products does Micron produce?", "route": "GRAPH", "query_type": "RELATIONS_OF"}
+{"id": "g06", "question": "Which suppliers are common to Intel and AMD?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS"}
+{"id": "g07", "question": "Which competitors do NVIDIA and Intel both name?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS"}
+{"id": "g08", "question": "Which companies supply the competitors of AMD?", "route": "GRAPH", "query_type": "TWO_HOP"}
+{"id": "g09", "question": "What regulations apply to the customers of TSMC?", "route": "GRAPH", "query_type": "TWO_HOP"}
+{"id": "g10", "question": "Which markets do NVIDIA's suppliers serve?", "route": "GRAPH", "query_type": "TWO_HOP"}
+{"id": "g11", "question": "How is Micron connected to AMD?", "route": "GRAPH", "query_type": "PATH_BETWEEN"}
+{"id": "g12", "question": "What links ASML to NVIDIA?", "route": "GRAPH", "query_type": "PATH_BETWEEN"}
+{"id": "g13", "question": "Which company lists the most suppliers?", "route": "GRAPH", "query_type": "COUNT"}
+{"id": "g14", "question": "How many competitors does NVIDIA name?", "route": "GRAPH", "query_type": "COUNT"}
+{"id": "g15", "question": "Give me an overview of Mobileye's relationships in the filings.", "route": "GRAPH", "query_type": "ENTITY_PROFILE"}
+{"id": "v01", "question": "When did AMD acquire ZT Systems and what did it pay?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "v02", "question": "Why did NVIDIA's gross margin decline in fiscal 2026?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "v03", "question": "What is high bandwidth memory used for?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "v04", "question": "How does Intel describe the risks of its foundry strategy?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "v05", "question": "What did Micron say about EUV in its 1-gamma DRAM node?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "v06", "question": "How much did NVIDIA's data center networking revenue grow?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "v07", "question": "What privacy laws does NVIDIA mention?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "v08", "question": "What is Applied Materials' strategy in advanced packaging?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "v09", "question": "What is the capital of France?", "route": "VECTOR", "query_type": "NONE"}

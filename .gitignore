@@ -8,3 +8,4 @@ data/processed/
 data/cache/
 data/*.log
 *.egg-info/
+data/logs/
