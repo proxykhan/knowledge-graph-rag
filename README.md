@@ -34,10 +34,23 @@ QUERY
 
 - [x] Phase 0: project setup, ontology, EDGAR download, section parsing, chunking
 - [x] Phase 1: LLM extraction → entity resolution → Neo4j (MERGE, chunk_id on every edge). 5 filings, 404 chunks → 760 grounded relationships (62 rejected) → 432 entities, 457 distinct facts
-- [ ] Phase 2: pgvector index (HNSW), recall@k on a labeled set
+- [x] Phase 2: pgvector index (HNSW), recall@k on a labeled set. Recall@5 0.83, recall@10 0.90 on 30 labeled questions (see below)
 - [ ] Phase 3: router + parameterized Cypher templates
 - [ ] Phase 4: merged context + validated citations, FastAPI endpoint
 - [ ] Phase 5: benchmark vs. vector-only baseline
+
+## Retrieval quality (Phase 2)
+
+30 questions written in different words from the filings, each labeled with phrases quoted verbatim from one company's 10-K (`eval/retrieval_questions.jsonl`); every chunk containing a phrase counts as relevant. Embeddings: `BAAI/bge-small-en-v1.5`, local.
+
+| Chunks embedded as | recall@1 | recall@5 | recall@10 | MRR@10 |
+|---|---|---|---|---|
+| raw chunk text | 0.30 | 0.67 | 0.77 | 0.47 |
+| **company + section header + text** | **0.43** | **0.83** | **0.90** | **0.61** |
+
+The header matters because 10-K text says "we": a question about NVIDIA otherwise has nothing to match. Of the 5 questions still missed at k=5, two are supplier questions ("whose processes does AMD rely on?"), the case the graph route is built for.
+
+HNSW (`m=16`, `ef_construction=64`, `ef_search=40`) returned the exact top 10 for every question at every `ef_search` from 10 to 100. At 404 chunks the index is effectively exact, so `ef_search` is not yet a meaningful tuning knob here.
 
 ## Setup
 
@@ -58,7 +71,15 @@ QUERY
    python -m kgrag.ingest.edgar NVDA AMD INTC AMAT MU
    python -m kgrag.ingest.chunker
    ```
-5. Run tests: `pytest`
+5. Extract, resolve, load the graph, and index vectors:
+   ```bash
+   python -m kgrag.extract.extractor
+   python -m kgrag.graph.resolve
+   python -m kgrag.graph.load --reset
+   python -m kgrag.vector.index
+   python -m kgrag.eval.retrieval
+   ```
+6. Run tests: `pytest`
 
 ## Design decisions
 
@@ -68,6 +89,8 @@ QUERY
 - **Sections Items 1, 1A, 7 only**: Business, Risk Factors and MD&A hold nearly all named customers, suppliers, competitors and acquisitions.
 - **Pluggable LLM provider** (`src/kgrag/llm.py`): Gemini free tier by default, Claude with one setting (`LLM_PROVIDER=claude`). The free tier's limits are unpublished and per project, so requests are paced, per-minute 429s slow the pacer, and a per-day 429 stops the run cleanly; the per-chunk cache makes the next run resume where it stopped.
 - **Grounding check on every extracted fact**: each relationship must carry a quote that appears verbatim in its chunk, or it is rejected. The chunk id is attached by code, never by the model.
+- **Company + section header on every embedded chunk**: +16 points recall@5 (measured above).
+- **Graph and vector store share one key, `chunk_id`**: every Neo4j edge lists the chunk ids that justify it, and every pgvector row lists the entity ids its chunk mentions.
 - **Prompt version is part of the cache key**, so changing the prompt can never silently mix old and new extractions.
 
 ## What did not work
@@ -79,4 +102,6 @@ QUERY
 - **Two-letter acronyms are ambiguous.** "EC" merged into "export controls" (it can also mean European Commission). Acronym matching now needs 3+ letters.
 - **"U.S. export controls" and "export controls" remain separate nodes**, on purpose: the bare phrase sometimes refers to other countries' controls.
 - **10-Ks rarely name equipment customers.** Applied Materials' filing does not say it supplies TSMC or Intel, so supply chains through equipment makers are missing from the graph.
+- **The first retrieval labels were incomplete.** 3 of 30 questions were answered by chunks the label missed (the ZT Systems acquisition is stated in both Risk Factors and MD&A). Inspecting the top results of every miss found them; labels now allow several verbatim phrases. Recall@5 moved from 0.73 to 0.83 by fixing labels, not the system.
+- **Dead row versions degraded HNSW results.** Re-embedding updates every row; before `VACUUM`, `ef_search=10` returned only 82% of the exact top 10. The indexer now vacuums after every load.
 - **Generic 10-K section parsing failed on Intel.** Intel's 10-K has no "Item 1A" headings in the body, only a page-number cross-reference index, so the parser found 0 sections. Fixed with per-filer start/end line markers (`SECTION_MARKERS` in `companies.py`). Those markers are tied to one filing year and need re-checking for each new 10-K.

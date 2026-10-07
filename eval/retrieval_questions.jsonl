@@ -1,0 +1,30 @@
+{"id": "r01", "ticker": "INTC", "question": "Which robotics company did Mobileye agree to buy in early 2026, and at what price?", "phrases": ["to acquire Mentee Robotics"]}
+{"id": "r02", "ticker": "AMD", "question": "When did AMD close its purchase of ZT Systems?", "phrases": ["completed our acquisition of ZT Systems", "completed the acquisition of ZT Systems"]}
+{"id": "r03", "ticker": "NVDA", "question": "Which vendors does NVIDIA source memory chips from?", "phrases": ["We purchase memory from SK Hynix"]}
+{"id": "r04", "ticker": "MU", "question": "What was Micron's first DRAM process node to use extreme ultraviolet lithography?", "phrases": ["first DRAM node incorporating EUV lithography"]}
+{"id": "r05", "ticker": "NVDA", "question": "What networking company did NVIDIA buy and what new processor class came from it?", "phrases": ["Our acquisition of Mellanox in 2020"]}
+{"id": "r06", "ticker": "AMD", "question": "Who are AMD's main rivals in programmable logic devices?", "phrases": ["primary FPGA competitors such as Altera"]}
+{"id": "r07", "ticker": "AMD", "question": "How large were AMD's inventory charges tied to the export restriction on its MI308 data center GPUs?", "phrases": ["approximately $440 million of net inventory"]}
+{"id": "r08", "ticker": "INTC", "question": "What were the first Intel products built on its newest leading-edge manufacturing node?", "phrases": ["our first products manufactured on our new leading-edge node", "Core Ultra Series 3"]}
+{"id": "r09", "ticker": "AMAT", "question": "Who is the chief financial officer of Applied Materials and how long has he held the role?", "phrases": ["Mr. Hill, age 59"]}
+{"id": "r10", "ticker": "MU", "question": "What benefits does Micron claim for its newest data center solid state drive?", "phrases": ["6550 ION SSD"]}
+{"id": "r11", "ticker": "NVDA", "question": "How fast did NVIDIA's data center networking revenue grow last year and why?", "phrases": ["Data Center networking grew 142%"]}
+{"id": "r12", "ticker": "NVDA", "question": "What takeover-related rights does Microsoft hold over NVIDIA shares because of the Xbox deal?", "phrases": ["first and last rights of refusal"]}
+{"id": "r13", "ticker": "INTC", "question": "Which outside investors has Intel brought in to help finance new fabs?", "phrases": ["joint investment with Brookfield"]}
+{"id": "r14", "ticker": "AMAT", "question": "Who runs Applied Materials' corporate venture investing arm?", "phrases": ["venture capital arm"]}
+{"id": "r15", "ticker": "NVDA", "question": "In what year did NVIDIA's head of operations join the company?", "phrases": ["Debora Shoquist joined NVIDIA in 2007"]}
+{"id": "r16", "ticker": "AMD", "question": "Whose manufacturing processes does AMD rely on for its most advanced CPUs and GPUs?", "phrases": ["product microprocessor and GPU portfolio on TSMC"]}
+{"id": "r17", "ticker": "INTC", "question": "Does Intel depend on a competing foundry to make parts of its newer chips?", "phrases": ["tiles manufactured by TSMC"]}
+{"id": "r18", "ticker": "AMD", "question": "What will Sanmina do for AMD after the ZT Systems deal?", "phrases": ["Sanmina will also be our preferred partner"]}
+{"id": "r19", "ticker": "AMD", "question": "What end markets do AMD's embedded products go into?", "phrases": ["Our Embedded Segment products are sold to customers in a very wide range of markets"]}
+{"id": "r20", "ticker": "MU", "question": "When will the OECD global minimum tax start applying to Micron through Singapore?", "phrases": ["Singapore enacted legislation to implement Pillar Two"]}
+{"id": "r21", "ticker": "NVDA", "question": "Why did NVIDIA's gross margin fall in fiscal 2026?", "phrases": ["transitioned from offering Hopper HGX systems to Blackwell"]}
+{"id": "r22", "ticker": "AMAT", "question": "When did Applied Materials acquire Varian Semiconductor Equipment?", "phrases": ["until its acquisition by us in November 2011"]}
+{"id": "r23", "ticker": "INTC", "question": "Which Intel graphics product line is aimed at gamers and creators?", "phrases": ["graphics family is primarily designed for consumer and gaming PCs"]}
+{"id": "r24", "ticker": "NVDA", "question": "Which data privacy laws force NVIDIA's customers to put contract terms on their vendors?", "phrases": ["such as the GDPR and the CCPA"]}
+{"id": "r25", "ticker": "NVDA", "question": "Which companies does NVIDIA see as competitors for chips in cars and autonomous machines?", "phrases": ["suppliers of hardware and software for SoC products"]}
+{"id": "r26", "ticker": "AMD", "question": "What gaming graphics cards did AMD launch on its newest graphics architecture?", "phrases": ["AMD Radeon 9000 Series GPUs and Radeon AI PRO 9700", "Radeon RX 9000 Series graphics cards, based on a new AMD RDNA"]}
+{"id": "r27", "ticker": "INTC", "question": "Which majority-owned subsidiaries does Intel consolidate with minority shareholders?", "phrases": ["non-controlling interests in Mobileye, IMS Nanofabrication"]}
+{"id": "r28", "ticker": "INTC", "question": "Which cloud giants design their own chips in competition with Intel?", "phrases": ["hyperscalers such as Amazon, Google, Meta and Microsoft"]}
+{"id": "r29", "ticker": "MU", "question": "How has generative AI changed demand for high bandwidth memory at Micron?", "phrases": ["driven increased demand for HBM"]}
+{"id": "r30", "ticker": "NVDA", "question": "How could Chinese limits on gaming time hurt NVIDIA's revenue?", "phrases": ["restrictions imposed by the Chinese government on the duration of gaming"]}
