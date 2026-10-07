@@ -36,7 +36,7 @@ QUERY
 - [x] Phase 1: LLM extraction → entity resolution → Neo4j (MERGE, chunk_id on every edge). 5 filings, 404 chunks → 760 grounded relationships (62 rejected) → 432 entities, 457 distinct facts
 - [x] Phase 2: pgvector index (HNSW), recall@k on a labeled set. Recall@5 0.83, recall@10 0.90 on 30 labeled questions (see below)
 - [x] Phase 3: router + parameterized Cypher templates. 24/24 routing decisions correct on a small self-written set (see caveat below)
-- [ ] Phase 4: merged context + validated citations, FastAPI endpoint
+- [x] Phase 4: merged context + validated citations, FastAPI endpoint
 - [ ] Phase 5: benchmark vs. vector-only baseline
 
 ## Retrieval quality (Phase 2)
@@ -66,6 +66,22 @@ The model never writes Cypher: entity ids and relation names reach Neo4j only as
 | out-of-scope question | confidence 0.10 → both paths (refusal is Phase 4's job) |
 
 **Caveat:** I wrote both the router's few-shot examples and these questions, and several are close in wording, so this overstates real-world accuracy. The Phase 5 benchmark uses separately written questions.
+
+## Grounded answers (Phase 4)
+
+Graph rows become plain sentences ("TSMC supplies NVIDIA Corporation.") with their evidence quotes, de-duplicated across paths, and go into the prompt under a **Graph facts** label; vector hits go under **Retrieved passages**. Every item gets a source id. The model returns claims, each citing source ids, plus an `answerable` flag for refusals. A draft is rejected and regenerated (up to 3 attempts, with the problems listed) when a claim:
+
+- has no citation,
+- cites an id that was not retrieved (an invented source), or
+- states a number its cited text does not contain.
+
+Claims that still fail are dropped and reported, never shown, so every citation in a response resolves to a retrieved chunk (`GET /chunks/{chunk_id}`).
+
+Example: `POST /ask {"question": "Who supplies the companies that compete with NVIDIA?"}` answers from three filings (NVIDIA names its competitors; Intel's and AMD's filings name their suppliers), citing 14 chunks.
+
+```bash
+uvicorn kgrag.api:app --port 8000   # then open http://localhost:8000/docs
+```
 
 ## Setup
 
@@ -106,6 +122,7 @@ The model never writes Cypher: entity ids and relation names reach Neo4j only as
 - **Grounding check on every extracted fact**: each relationship must carry a quote that appears verbatim in its chunk, or it is rejected. The chunk id is attached by code, never by the model.
 - **Company + section header on every embedded chunk**: +16 points recall@5 (measured above).
 - **Graph and vector store share one key, `chunk_id`**: every Neo4j edge lists the chunk ids that justify it, and every pgvector row lists the entity ids its chunk mentions.
+- **Numbers must appear in the cited text.** Checking that a cited id exists does not show the source supports the claim. Comparing every number in a claim against its cited sources is deterministic, free, and catches the most damaging kind of unsupported claim.
 - **One router call does routing and parameter extraction**, halving free-tier requests per question compared with separate calls.
 - **Prompt version is part of the cache key**, so changing the prompt can never silently mix old and new extractions.
 
@@ -121,5 +138,7 @@ The model never writes Cypher: entity ids and relation names reach Neo4j only as
 - **The first retrieval labels were incomplete.** 3 of 30 questions were answered by chunks the label missed (the ZT Systems acquisition is stated in both Risk Factors and MD&A). Inspecting the top results of every miss found them; labels now allow several verbatim phrases. Recall@5 moved from 0.73 to 0.83 by fixing labels, not the system.
 - **Dead row versions degraded HNSW results.** Re-embedding updates every row; before `VACUUM`, `ef_search=10` returned only 82% of the exact top 10. The indexer now vacuums after every load.
 - **Entity linking exposed duplicate nodes.** "Samsung" and "Samsung Electronics Co., Ltd." were separate entities, splitting Samsung's facts (also ASML, IMS, OpenAI, THATIC, KLA/KLA-Tencor). Added a rule: a one-word company name joins the single longer company name starting with that word, and does nothing when it is ambiguous ("Applied" → Applied Materials or Applied Ventures). "Micron" also linked to a Product node the extractor had mislabelled; the linker now prefers companies.
+- **Correct but incomplete answers.** Asked about AMD's MI308 export-control charges, the system answered "approximately $800 million in Q2 2025" (correct, from three Risk Factors and MD&A passages) but missed the full-year net figure ($440 million), whose chunk was not retrieved. Citations prove grounding, not completeness.
+- **Latency is ~10 s per question** on the Gemini free tier: two LLM calls (router, answer) plus retrieval.
 - **Network timeouts crashed the router eval.** The Gemini SDK raises `httpx` transport errors, not API errors, so the retry logic missed them. They are now retried like 503s.
 - **Generic 10-K section parsing failed on Intel.** Intel's 10-K has no "Item 1A" headings in the body, only a page-number cross-reference index, so the parser found 0 sections. Fixed with per-filer start/end line markers (`SECTION_MARKERS` in `companies.py`). Those markers are tied to one filing year and need re-checking for each new 10-K.
