@@ -1,0 +1,27 @@
+# Core
+pydantic>=2.8
+pydantic-settings>=2.4
+python-dotenv>=1.0
+
+# Phase 1: corpus download + chunking
+requests>=2.32
+beautifulsoup4>=4.12
+lxml>=5.3
+langchain-text-splitters>=0.3
+
+# Phase 1: extraction + graph
+google-genai>=2.0
+anthropic>=1.0  # optional: LLM_PROVIDER=claude
+neo4j>=5.20
+
+# Phase 1 (entity resolution) + Phase 2: local embeddings + pgvector
+sentence-transformers>=3.0
+psycopg[binary]>=3.2
+pgvector>=0.3
+
+# Phase 3-4: API
+fastapi>=0.115
+uvicorn>=0.30
+
+# Dev
+pytest>=8.0

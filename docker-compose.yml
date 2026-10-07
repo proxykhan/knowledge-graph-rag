@@ -1,0 +1,28 @@
+services:
+  neo4j:
+    image: neo4j:5-community
+    container_name: kgrag-neo4j
+    ports:
+      - "7474:7474"   # browser UI: http://localhost:7474
+      - "7687:7687"   # bolt protocol (Python driver)
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-kgrag-dev-password}
+      NEO4J_server_memory_heap_max__size: 1G
+    volumes:
+      - neo4j_data:/data
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: kgrag-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: kgrag
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kgrag-dev-password}
+      POSTGRES_DB: kgrag
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  neo4j_data:
+  pg_data:
