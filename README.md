@@ -1,22 +1,44 @@
 # Knowledge Graph RAG for Enterprise Data
 
-Hybrid knowledge-graph + vector RAG over SEC 10-K filings from 20 semiconductor companies.
+**Hybrid knowledge graph + vector RAG over SEC 10-K filings: raised two-hop question accuracy from 8% to 92% and three-hop from 0% to 50% against a vector-only baseline, at 18 s p95 on a free-tier LLM.**
 
-**Stack:** Python · Neo4j · pgvector · LangChain (text splitting) · Gemini API (free tier; Claude API switchable) · sentence-transformers · FastAPI
-
-Answers multi-hop questions ("which equipment suppliers of NVIDIA's competitors…") that plain vector RAG misses.
+Corpus: the latest 10-Ks of NVIDIA, AMD, Intel, Micron and Applied Materials (404 chunks). **Stack:** Python · Neo4j · pgvector · LangChain (text splitting) · Gemini API (free tier; Claude switchable) · sentence-transformers · FastAPI
 
 ## Results
 
-> Filled in at Phase 5: accuracy by hop count vs. a vector-only baseline, latency p95, cost per query, one-time ingestion cost.
+50 questions (`eval/benchmark_questions.jsonl`), each with required answer items checked against the filing text. Both systems use the same LLM, answer generator and citation checks; only retrieval differs. Scoring is deterministic string matching (no LLM judge). Out-of-scope questions are correct only when refused.
 
-| Question type | Vector RAG | Graph + Vector RAG |
+| Question type | n | Vector RAG | Hybrid graph + vector |
+|---|---|---|---|
+| Single hop | 12 | 75% | 75% |
+| Two hop | 12 | 8% | **92%** |
+| Three hop | 8 | 0% | **50%** |
+| Aggregation | 8 | 50% | 50% |
+| Out of scope (refused) | 10 | 100% | 100% |
+| **All** | 50 | 48% | **76%** |
+
+Parity on single-hop questions, and a widening gap as hops increase. Vector RAG mostly *refused* multi-hop questions rather than hallucinating: the facts sit in different filings (NVIDIA's 10-K names its competitors, AMD's and Intel's name their suppliers), so no top-5 passage set contains the whole chain, and the citation checks block guesses.
+
+| Cost and latency | Vector RAG | Hybrid |
 |---|---|---|
-| Single hop | – | – |
-| Two hop | – | – |
-| Three hop | – | – |
-| Aggregation | – | – |
-| Out of scope (correct refusal) | – | – |
+| Latency p50 / p95 | 6.0 s / 12.0 s | 11.9 s / 18.1 s |
+| LLM tokens per query | 3,439 | 3,564 |
+| Cost per query (paid-tier equivalent) | $0.0022 | $0.0025 |
+| One-time ingestion | embeddings only (local, $0) | + graph extraction: 101 requests, 562k tokens, **$0.82** paid-tier equivalent |
+
+The graph is slower (two LLM calls per question: router + answer) and costs extra to build. On this corpus that buys +28 points overall and +84 points on two-hop questions.
+
+**Where the hybrid still fails** (every miss inspected; details in `eval/results/benchmark_runs.jsonl`):
+
+- *Wrong hop direction (2):* for "Micron's customers" the router chose `SUPPLIES/in` instead of `out`; the chain matched nothing and fell back to vectors.
+- *Question shapes no template covers (2):* "which foundry supplies **all three**" needs a 3-way intersection (the template takes two entities); "suppliers that **also** supply competitors" is an intersection, not a chain.
+- *Routed to vectors, retrieval missed (4):* includes 2 multi-hop questions about Mentee Robotics' owner that the router misjudged as single facts.
+- *Single-hop retrieval misses (3, both systems):* the passage was not in the top 5; both systems refused rather than guess.
+- *Context cap (1):* a three-hop answer was correct but cut off at 25 graph facts.
+
+These results are from router v2 and are reported as-is: tuning the router on these 50 questions would fit the test set. One answer-key error was fixed after inspection (t12: the filing calls the company "Applied", not "Applied Materials"); the report re-scores both systems from their saved answers.
+
+**Caveat on question selection:** the questions were written with the graph available. Every link in a multi-hop answer key is stated verbatim in a filing, but only chains the extractor found could be chosen, so multi-hop questions about facts the extractor missed are absent. That favours the hybrid system; a question set written without seeing the graph would give a fairer (likely smaller) gap.
 
 ## Architecture
 
@@ -33,11 +55,11 @@ QUERY
 ## Build progress
 
 - [x] Phase 0: project setup, ontology, EDGAR download, section parsing, chunking
-- [x] Phase 1: LLM extraction → entity resolution → Neo4j (MERGE, chunk_id on every edge). 5 filings, 404 chunks → 760 grounded relationships (62 rejected) → 432 entities, 457 distinct facts
+- [x] Phase 1: LLM extraction → entity resolution → Neo4j (MERGE, chunk_id on every edge). 5 filings, 404 chunks → 760 grounded relationships (62 rejected) → 424 entities, 454 distinct facts
 - [x] Phase 2: pgvector index (HNSW), recall@k on a labeled set. Recall@5 0.83, recall@10 0.90 on 30 labeled questions (see below)
 - [x] Phase 3: router + parameterized Cypher templates. 24/24 routing decisions correct on a small self-written set (see caveat below)
 - [x] Phase 4: merged context + validated citations, FastAPI endpoint
-- [ ] Phase 5: benchmark vs. vector-only baseline
+- [x] Phase 5: benchmark vs. vector-only baseline (results at the top)
 
 ## Retrieval quality (Phase 2)
 
@@ -58,7 +80,7 @@ One light LLM call per question (Gemini 3.5 Flash-Lite, minimal thinking) return
 
 The model never writes Cypher: entity ids and relation names reach Neo4j only as query parameters, relation and direction are enums validated before use, and a test passes a Cypher-injection string through every template to check it never appears in the query text.
 
-| Routing eval (24 questions) | |
+| Routing eval (24 questions, router v1) | |
 |---|---|
 | route accuracy | 24/24 |
 | route + query type accuracy | 24/24 |
@@ -109,6 +131,8 @@ uvicorn kgrag.api:app --port 8000   # then open http://localhost:8000/docs
    python -m kgrag.graph.load --reset
    python -m kgrag.vector.index
    python -m kgrag.eval.retrieval
+   python -m kgrag.eval.routing
+   python -m kgrag.eval.benchmark
    ```
 6. Run tests: `pytest`
 
@@ -131,6 +155,9 @@ uvicorn kgrag.api:app --port 8000   # then open http://localhost:8000/docs
 - **Newest Gemini models were unusable on the free tier.** `gemini-3.8-flash` and `gemini-3.7-flash` returned 503 "high demand" (and one 504 after 60s) even for a one-word prompt; `gemini-3.5-flash` answered in ~1.5s, so the pipeline uses it.
 - **Prompt v1 copied the SEC's raw company title** ("APPLIED MATERIALS INC /DE") as the entity name and wrote long descriptive names ("export controls enacted by the United States government"). v2 passes clean legal names and asks for short standard names for non-company entities.
 - **Gemini 3.5 Flash's free tier allows only 20 requests/day.** Found from the 429 error body after 12 chunks. Switched to Gemini 3.5 Flash-Lite and 4 chunks per request (~101 requests for 404 chunks). On an 8-chunk comparison Flash-Lite matched Flash on company-to-company relationships but skipped the filer's own market/technology/regulation links in 3 of 8 chunks, so those relationship types are under-covered.
+- **The extractor recorded a stale fact.** Intel's 10-K calls Altera "our wholly owned subsidiary as of that date" in the sentence announcing the sale of 51% of it, so the graph says Altera is an Intel subsidiary. Verbatim evidence guarantees the quote exists, not that the fact is still true; Altera was excluded from benchmark answer keys.
+- **The router eval (24/24) overstated accuracy.** On the independent benchmark the router sent 2 of 20 multi-hop questions to vectors and chose a wrong hop direction on 2 more.
+- **Two-hop templates could not express three-hop questions.** Replaced `TWO_HOP` with a `CHAIN` template of 1-3 hops before running the benchmark.
 - **Embedding similarity merged different products.** "Ryzen AI Max+ 388" / "392", "RDNA 3.5" / "RDNA 4", and via a union-find chain "AMD EPYC" into "Ryzen Embedded 9000". Fixed by requiring identical numbers for an embedding merge and stricter Product/Technology thresholds.
 - **Two-letter acronyms are ambiguous.** "EC" merged into "export controls" (it can also mean European Commission). Acronym matching now needs 3+ letters.
 - **"U.S. export controls" and "export controls" remain separate nodes**, on purpose: the bare phrase sometimes refers to other countries' controls.

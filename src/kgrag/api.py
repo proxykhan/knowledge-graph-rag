@@ -15,6 +15,7 @@ from dataclasses import asdict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from kgrag import llm
 from kgrag.answer.generate import answer
 from kgrag.retrieval.retriever import _driver
 from kgrag.vector.index import connect
@@ -49,6 +50,9 @@ class AskResponse(BaseModel):
     rejections: list[list[str]]
     retrieval_notes: list[str]
     latency_ms: int
+    tokens_in: int
+    tokens_out: int
+    mode: str
 
 
 class ChunkOut(BaseModel):
@@ -62,7 +66,10 @@ class ChunkOut(BaseModel):
 
 @app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest) -> AskResponse:
-    return AskResponse(**asdict(answer(req.question.strip())))
+    try:
+        return AskResponse(**asdict(answer(req.question.strip())))
+    except llm.QuotaExhausted as e:
+        raise HTTPException(status_code=503, detail=f"LLM quota exhausted, try again later: {e}")
 
 
 @app.get("/chunks/{chunk_id}", response_model=ChunkOut)

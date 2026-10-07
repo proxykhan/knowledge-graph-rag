@@ -52,6 +52,7 @@ SYNONYMS = {
     ("Location", "peoples republic of china"): "china",
     ("Location", "mainland china"): "china",
     ("Company", "gf"): "globalfoundries",  # nickname, not an acronym of a one-word name
+    ("Company", "global foundries"): "globalfoundries",
     ("Company", "zt group int l"): "zt systems",  # legal name of ZT Systems
 }
 

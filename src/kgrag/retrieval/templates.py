@@ -21,7 +21,7 @@ from kgrag.ontology import RelationType
 class QueryType(StrEnum):
     RELATIONS_OF = "RELATIONS_OF"            # who supplies X / what does X produce
     SHARED_NEIGHBORS = "SHARED_NEIGHBORS"    # suppliers shared by X and Y
-    TWO_HOP = "TWO_HOP"                      # suppliers of X's competitors
+    CHAIN = "CHAIN"                          # 1-3 hops: suppliers of X's competitors
     PATH_BETWEEN = "PATH_BETWEEN"            # how are X and Y connected
     COUNT = "COUNT"                          # how many suppliers does X have / who has the most
     ENTITY_PROFILE = "ENTITY_PROFILE"        # everything the graph knows about X
@@ -73,14 +73,31 @@ def shared_neighbors(a: str, b: str, rel: RelationType | None, direction: Direct
     return query, {"a": a, "b": b, "rel": _rel_param(rel)}
 
 
-def two_hop(entity_id: str, rel1: RelationType | None, dir1: Direction,
-            rel2: RelationType | None, dir2: Direction) -> tuple[str, dict]:
+MAX_HOPS = 3
+
+
+def chain(entity_id: str, hops: list[tuple[RelationType | None, Direction]]) -> tuple[str, dict]:
+    """Follow 1-3 hops from one entity, e.g. Micron -SUPPLIES-> x -COMPETES_WITH- y <-SUPPLIES- z.
+
+    The pattern is assembled from fixed _ARROWS fragments, one per hop; relation names
+    go in as parameters $rel0..$rel2.
+    """
+    if not 1 <= len(hops) <= MAX_HOPS:
+        raise ValueError(f"chain needs 1-{MAX_HOPS} hops, got {len(hops)}")
+    pattern = "(e:Entity {id: $id})"
+    filters, params = [], {"id": entity_id}
+    for i, (rel, direction) in enumerate(hops):
+        pattern += f"{_arrow(direction, f'r{i}')}(n{i}:Entity)"
+        filters.append(f"($rel{i} IS NULL OR type(r{i}) = $rel{i})")
+        params[f"rel{i}"] = _rel_param(rel)
+    last = f"n{len(hops) - 1}"
+    score = " * ".join(f"r{i}.confidence" for i in range(len(hops)))
     query = f"""
-        MATCH p = (e:Entity {{id: $id}}){_arrow(dir1, 'r1')}(m:Entity){_arrow(dir2, 'r2')}(n:Entity)
-        WHERE ($rel1 IS NULL OR type(r1) = $rel1) AND ($rel2 IS NULL OR type(r2) = $rel2) AND n <> e
-        RETURN m.name AS via, n.name AS reached, {_EDGES} AS edges
-        ORDER BY r1.confidence * r2.confidence DESC LIMIT {LIMIT}"""
-    return query, {"id": entity_id, "rel1": _rel_param(rel1), "rel2": _rel_param(rel2)}
+        MATCH p = {pattern}
+        WHERE {' AND '.join(filters)} AND {last} <> e
+        RETURN {last}.name AS reached, {_EDGES} AS edges
+        ORDER BY {score} DESC LIMIT {LIMIT}"""
+    return query, params
 
 
 def path_between(a: str, b: str) -> tuple[str, dict]:

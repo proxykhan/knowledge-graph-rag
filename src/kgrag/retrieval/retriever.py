@@ -45,6 +45,7 @@ class RetrievalResult:
     graph_rows: list[dict] = field(default_factory=list)
     passages: list[Passage] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)  # fallbacks and why
+    usage: llm.Usage = field(default_factory=llm.Usage)  # router tokens
 
 
 @lru_cache(maxsize=1)
@@ -55,15 +56,15 @@ def _driver():
 def build_graph_query(decision: router.RouterDecision, links: list[Link]) -> tuple[str, dict] | None:
     """Map a decision onto a template. None when the template's required entities are missing."""
     ids = [l.entity_id for l in links]
-    rel, direction = decision.relation_type(), decision.direction
+    hops = decision.hop_params() or [(None, templates.Direction.ANY)]
+    rel, direction = hops[0]
     qt = decision.query_type
     if qt == QueryType.RELATIONS_OF and ids:
         return templates.relations_of(ids[0], rel, direction)
     if qt == QueryType.SHARED_NEIGHBORS and len(ids) >= 2:
         return templates.shared_neighbors(ids[0], ids[1], rel, direction)
-    if qt == QueryType.TWO_HOP and ids:
-        return templates.two_hop(ids[0], rel, direction,
-                                 decision.second_relation_type(), decision.second_direction)
+    if qt == QueryType.CHAIN and ids:
+        return templates.chain(ids[0], hops)
     if qt == QueryType.PATH_BETWEEN and len(ids) >= 2:
         return templates.path_between(ids[0], ids[1])
     if qt == QueryType.COUNT:
@@ -83,7 +84,9 @@ def retrieve(question: str) -> RetrievalResult:
     usage = llm.Usage()
     try:
         decision, usage = router.route(question)
-    except (llm.LLMError, llm.QuotaExhausted) as e:
+    except llm.LLMError as e:
+        # QuotaExhausted is deliberately not caught: silently degrading to vector-only would
+        # make a benchmark run (or a user) believe the hybrid system answered.
         decision = None
         result = RetrievalResult(question, "VECTOR", None, notes=[f"router failed ({e}); vector only"])
 
@@ -120,8 +123,14 @@ def retrieve(question: str) -> RetrievalResult:
     if decision is None or want_vector:
         result.passages = _vector(question)
 
+    result.usage = usage
     _log(result, usage, (time.perf_counter() - start) * 1000)
     return result
+
+
+def retrieve_vector_only(question: str) -> RetrievalResult:
+    """The baseline: plain vector RAG, no router and no graph."""
+    return RetrievalResult(question, "VECTOR", None, passages=_vector(question))
 
 
 def _log(result: RetrievalResult, usage: llm.Usage, latency_ms: float) -> None:

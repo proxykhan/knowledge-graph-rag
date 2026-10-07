@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from kgrag import llm
 from kgrag.answer.context import Context, build_context
-from kgrag.retrieval.retriever import retrieve
+from kgrag.retrieval.retriever import retrieve, retrieve_vector_only
 
 MAX_ATTEMPTS = 3
 REFUSAL = "The filings in this corpus do not contain the answer to this question."
@@ -72,6 +72,9 @@ class Answer:
     rejections: list[list[str]] = field(default_factory=list)  # problems found in each rejected draft
     retrieval_notes: list[str] = field(default_factory=list)
     latency_ms: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    mode: str = "hybrid"
 
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -122,12 +125,16 @@ def _render_claims(claims: list[Claim], ctx: Context) -> tuple[str, list[dict]]:
     return " ".join(rendered), out
 
 
-def answer(question: str) -> Answer:
+def answer(question: str, mode: str = "hybrid") -> Answer:
+    """mode: "hybrid" (router + graph/vector) or "vector" (the plain vector RAG baseline).
+    Both use the same generator and the same citation checks."""
     start = time.perf_counter()
-    retrieval = retrieve(question)
+    retrieval = retrieve(question) if mode == "hybrid" else retrieve_vector_only(question)
     ctx = build_context(retrieval)
+    usage = llm.Usage()
+    usage.merge(retrieval.usage)
     result = Answer(question, False, REFUSAL, [], retrieval.route_used, 0,
-                    retrieval_notes=list(retrieval.notes))
+                    retrieval_notes=list(retrieval.notes), mode=mode)
 
     if ctx.sources:
         base = f"Question: {question}\n\n{ctx.render()}"
@@ -136,7 +143,8 @@ def answer(question: str) -> Answer:
         for attempt in range(1, MAX_ATTEMPTS + 1):
             result.attempts = attempt
             try:
-                draft, _ = llm.generate_structured(SYSTEM_PROMPT, message, AnswerDraft)
+                draft, call_usage = llm.generate_structured(SYSTEM_PROMPT, message, AnswerDraft)
+                usage.merge(call_usage)
             except llm.LLMError as e:
                 result.rejections.append([f"generation failed: {e}"])
                 continue
@@ -156,6 +164,7 @@ def answer(question: str) -> Answer:
             result.answer, result.claims = _render_claims(claims, ctx)
 
     result.latency_ms = round((time.perf_counter() - start) * 1000)
+    result.tokens_in, result.tokens_out = usage.input_tokens, usage.output_tokens
     return result
 
 

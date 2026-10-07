@@ -12,7 +12,7 @@ HOSTILE = "x'}) MATCH (n) DETACH DELETE n //"
 @pytest.mark.parametrize("query", [
     T.relations_of(HOSTILE, R.SUPPLIES, T.Direction.IN),
     T.shared_neighbors(HOSTILE, HOSTILE, R.SUPPLIES, T.Direction.IN),
-    T.two_hop(HOSTILE, R.COMPETES_WITH, T.Direction.ANY, R.SUPPLIES, T.Direction.IN),
+    T.chain(HOSTILE, [(R.COMPETES_WITH, T.Direction.ANY), (R.SUPPLIES, T.Direction.IN)]),
     T.path_between(HOSTILE, HOSTILE),
     T.count(HOSTILE, None, T.Direction.ANY),
     T.entity_profile(HOSTILE),
@@ -26,7 +26,7 @@ def test_values_never_reach_query_text(query):
 
 def _decision(**kw):
     base = dict(route="GRAPH", confidence=0.9, query_type="RELATIONS_OF", entities=["NVIDIA"],
-                relation="SUPPLIES", direction="in", second_relation="ANY", second_direction="any")
+                hops=[{"relation": "SUPPLIES", "direction": "in"}])
     return RouterDecision.model_validate(base | kw)
 
 
@@ -42,13 +42,14 @@ def test_template_needs_its_entities():
 
 
 def test_any_relation_becomes_null_parameter():
-    _, params = build_graph_query(_decision(relation="ANY"), [_link("company:nvidia")])
+    _, params = build_graph_query(_decision(hops=[{"relation": "ANY", "direction": "any"}]),
+                                  [_link("company:nvidia")])
     assert params["rel"] is None
 
 
 def test_router_rejects_relations_outside_the_ontology():
     with pytest.raises(ValueError):
-        _decision(relation="OWNS_SECRETLY")
+        _decision(hops=[{"relation": "OWNS_SECRETLY", "direction": "in"}])
 
 
 def test_linker_prefers_company_over_mislabelled_product():
@@ -59,3 +60,17 @@ def test_linker_prefers_company_over_mislabelled_product():
     ])
     assert linker.link("Micron").entity_id == "company:micron-technology"
     assert linker.link("micron technology").method == "alias"
+
+
+def test_three_hop_chain_builds_one_pattern_with_parameters():
+    cypher, params = build_graph_query(_decision(query_type="CHAIN", entities=["Micron"], hops=[
+        {"relation": "SUPPLIES", "direction": "out"},
+        {"relation": "COMPETES_WITH", "direction": "any"},
+        {"relation": "SUPPLIES", "direction": "in"}]), [_link("company:micron-technology")])
+    assert "-[r0]->(n0:Entity)-[r1]-(n1:Entity)<-[r2]-(n2:Entity)" in cypher
+    assert params == {"id": "company:micron-technology", "rel0": "SUPPLIES", "rel1": "COMPETES_WITH", "rel2": "SUPPLIES"}
+
+
+def test_chain_rejects_too_many_hops():
+    with pytest.raises(ValueError):
+        T.chain("x", [(None, T.Direction.ANY)] * 4)

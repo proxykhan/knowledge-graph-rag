@@ -5,9 +5,9 @@
 {"id": "g05", "question": "Which products does Micron produce?", "route": "GRAPH", "query_type": "RELATIONS_OF"}
 {"id": "g06", "question": "Which suppliers are common to Intel and AMD?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS"}
 {"id": "g07", "question": "Which competitors do NVIDIA and Intel both name?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS"}
-{"id": "g08", "question": "Which companies supply the competitors of AMD?", "route": "GRAPH", "query_type": "TWO_HOP"}
-{"id": "g09", "question": "What regulations apply to the customers of TSMC?", "route": "GRAPH", "query_type": "TWO_HOP"}
-{"id": "g10", "question": "Which markets do NVIDIA's suppliers serve?", "route": "GRAPH", "query_type": "TWO_HOP"}
+{"id": "g08", "question": "Which companies supply the competitors of AMD?", "route": "GRAPH", "query_type": "CHAIN"}
+{"id": "g09", "question": "What regulations apply to the customers of TSMC?", "route": "GRAPH", "query_type": "CHAIN"}
+{"id": "g10", "question": "Which markets do NVIDIA's suppliers serve?", "route": "GRAPH", "query_type": "CHAIN"}
 {"id": "g11", "question": "How is Micron connected to AMD?", "route": "GRAPH", "query_type": "PATH_BETWEEN"}
 {"id": "g12", "question": "What links ASML to NVIDIA?", "route": "GRAPH", "query_type": "PATH_BETWEEN"}
 {"id": "g13", "question": "Which company lists the most suppliers?", "route": "GRAPH", "query_type": "COUNT"}
