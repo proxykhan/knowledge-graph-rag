@@ -42,15 +42,9 @@ These results are from router v2 and are reported as-is: tuning the router on th
 
 ## Architecture
 
-```
-INGESTION
- 10-K HTML ─► parse sections ─► chunk (chunk_id) ─┬─► LLM extraction     ─► entity resolution ─► Neo4j
-                                                  └─► sentence-transformers ─────────────────► pgvector
-QUERY
- question ─► router ─┬─ GRAPH  ─► resolve entities ─► Cypher template ─┐
-                     ├─ VECTOR ─► HNSW search ──────────────────────────┼─► merge ─► LLM ─► citation check
-                     └─ unsure ─► both ─────────────────────────────────┘
-```
+![Architecture: ingestion writes a Neo4j graph and a pgvector index that share chunk_id; queries are routed to graph templates or vector search, then answered with validated citations](docs/architecture.svg)
+
+Ingestion writes two stores that share one key, `chunk_id`: every graph edge lists the chunks that justify it, and every vector row lists the entities its chunk mentions. At query time a light LLM call routes the question; graph questions run a parameterized Cypher template (the model never writes Cypher), the rest use vector search, and low-confidence questions use both. The answer must cite retrieved sources and every number must appear in the cited text, or the draft is regenerated.
 
 ## Build progress
 
