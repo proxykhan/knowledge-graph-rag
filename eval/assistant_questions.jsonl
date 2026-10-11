@@ -1,0 +1,15 @@
+{"id": "q01", "category": "single_hop", "question": "Which companies does Micron name as its competitors in memory chips?"}
+{"id": "q02", "category": "single_hop", "question": "Who are Applied Materials' largest customers?"}
+{"id": "q03", "category": "single_hop", "question": "Which companies supply Micron with equipment or materials?"}
+{"id": "q04", "category": "two_hop", "question": "Which of NVIDIA's suppliers does Micron name as competitors?"}
+{"id": "q05", "category": "two_hop", "question": "Which companies that compete with Intel are also suppliers to NVIDIA?"}
+{"id": "q06", "category": "two_hop", "question": "Who manufactures chips for the company that makes EPYC processors?"}
+{"id": "q07", "category": "two_hop", "question": "Which companies compete with Applied Materials' customers?"}
+{"id": "q08", "category": "two_hop", "question": "What products does the company that owns Mobileye make?"}
+{"id": "q09", "category": "two_hop", "question": "Which companies compete with Micron's customers?"}
+{"id": "q10", "category": "two_hop", "question": "In which countries do AMD's suppliers operate?"}
+{"id": "q11", "category": "three_hop", "question": "Who makes the equipment used by the companies that manufacture chips for NVIDIA?"}
+{"id": "q12", "category": "three_hop", "question": "Who supplies the competitors of the company that acquired ZT Systems?"}
+{"id": "q13", "category": "three_hop", "question": "What do the competitors of NVIDIA's memory suppliers make?"}
+{"id": "q14", "category": "out_of_scope", "question": "How much revenue does TSMC earn from Apple?"}
+{"id": "q15", "category": "out_of_scope", "question": "Which company will NVIDIA acquire next year?"}
