@@ -40,6 +40,16 @@ These results are from router v2 and are reported as-is: tuning the router on th
 
 **Caveat on question selection:** the questions were written with the graph available. Every link in a multi-hop answer key is stated verbatim in a filing, but only chains the extractor found could be chosen, so multi-hop questions about facts the extractor missed are absent. That favours the hybrid system; a question set written without seeing the graph would give a fairer (likely smaller) gap.
 
+## Web interface
+
+`uvicorn kgrag.api:app --port 8000`, then open **http://localhost:8000**. Written for non-technical readers:
+
+- **Ask a question:** the answer in plain language, a diagram of the facts it connected (laid out hop by hop), and every source with the supporting sentence highlighted in the original filing passage.
+- **Explore the map:** any company's suppliers, competitors, partners, acquisitions and more, each with its proof.
+- **How it works** and **Results:** the method and the benchmark, without jargon.
+
+No front-end build or external libraries: one HTML file (`src/kgrag/web/index.html`) served by the API.
+
 ## Architecture
 
 ![Architecture: ingestion writes a Neo4j graph and a pgvector index that share chunk_id; queries are routed to graph templates or vector search, then answered with validated citations](docs/architecture.svg)

@@ -35,6 +35,7 @@ class Source:
     text: str                     # statement or passage text shown to the model
     chunk_ids: list[str]          # where it came from; what a citation resolves to
     evidence: list[str] = field(default_factory=list)  # verbatim quotes behind a graph fact
+    edge: dict | None = None      # graph facts: {source, source_type, relation, target, target_type}
 
 
 @dataclass
@@ -72,7 +73,9 @@ def build_context(result: RetrievalResult) -> Context:
         if key not in edge_ids and len(edge_ids) < MAX_GRAPH_FACTS:
             sid = f"S{len(sources) + 1}"
             edge_ids[key] = sid
-            sources.append(Source(sid, "graph", statement(edge), list(edge["chunk_ids"]), list(edge["evidence"])))
+            sources.append(Source(sid, "graph", statement(edge), list(edge["chunk_ids"]), list(edge["evidence"]),
+                                  {k: edge.get(k) for k in ("source", "source_type", "relation", "target",
+                                                            "target_type")}))
         return edge_ids.get(key, "")
 
     summaries = []

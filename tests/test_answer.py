@@ -68,3 +68,12 @@ def test_api_ask_shape(monkeypatch):
     body = r.json()
     assert body["answerable"] and body["claims"][0]["citations"][0]["chunk_ids"] == ["N:1:0011"]
     assert client.post("/ask", json={"question": ""}).status_code == 422
+
+
+def test_web_interface_is_served():
+    from fastapi.testclient import TestClient
+
+    from kgrag import api
+
+    r = TestClient(api.app).get("/")
+    assert r.status_code == 200 and "Filing Explorer" in r.text

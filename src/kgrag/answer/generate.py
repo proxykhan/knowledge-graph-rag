@@ -75,6 +75,7 @@ class Answer:
     tokens_in: int = 0
     tokens_out: int = 0
     mode: str = "hybrid"
+    sources: list[dict] = field(default_factory=list)  # everything retrieved, with "cited" marked
 
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -162,6 +163,8 @@ def answer(question: str, mode: str = "hybrid") -> Answer:
 
         if result.answerable:
             result.answer, result.claims = _render_claims(claims, ctx)
+        cited = {cit["source_id"] for c in result.claims for cit in c["citations"]}
+        result.sources = [asdict(s) | {"cited": s.id in cited} for s in ctx.sources]
 
     result.latency_ms = round((time.perf_counter() - start) * 1000)
     result.tokens_in, result.tokens_out = usage.input_tokens, usage.output_tokens

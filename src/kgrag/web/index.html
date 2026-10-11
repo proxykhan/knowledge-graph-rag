@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filing Explorer: Knowledge Graph RAG</title>
+<style>
+  :root {
+    --bg: #F6F8FB; --card: #FFFFFF; --ink: #1A2230; --muted: #5B6675; --line: #E1E6EE;
+    --accent: #2F5FC4; --accent-soft: #EAF0FC; --good: #2E7D4F; --good-soft: #E8F5EC;
+    --warn: #A86500; --warn-soft: #FFF4E2; --bad: #B23A2E;
+    --shadow: 0 1px 2px rgba(20,30,50,.06), 0 4px 16px rgba(20,30,50,.06);
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.55 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  a { color: var(--accent); }
+  button { font: inherit; cursor: pointer; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+  /* header */
+  header { background: var(--card); border-bottom: 1px solid var(--line); }
+  .top { display: flex; align-items: center; gap: 14px; padding: 16px 0 10px; flex-wrap: wrap; }
+  .logo { width: 38px; height: 38px; border-radius: 10px; background: var(--accent); display: grid; place-items: center; flex: none; }
+  .brand h1 { font-size: 19px; margin: 0; line-height: 1.2; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+  .status { margin-left: auto; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #B9C2CF; }
+  .dot.ok { background: #36A26A; } .dot.err { background: var(--bad); }
+  nav { display: flex; gap: 4px; overflow-x: auto; }
+  nav button { background: none; border: 0; padding: 10px 14px; color: var(--muted); font-weight: 600; border-bottom: 2.5px solid transparent; white-space: nowrap; }
+  nav button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  main { padding: 24px 0 60px; }
+  section[role="tabpanel"][hidden] { display: none; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  h3 { font-size: 15px; margin: 0 0 8px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+
+  /* ask */
+  .askbox { display: flex; gap: 10px; }
+  .askbox input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 13px 15px; border: 1.5px solid var(--line); border-radius: 10px; outline: none; background: #fff; color: var(--ink); }
+  .askbox input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .btn { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 0 22px; font-weight: 600; font-size: 15px; }
+  .btn:disabled { opacity: .55; cursor: wait; }
+  .btn.ghost { background: var(--accent-soft); color: var(--accent); padding: 8px 14px; font-size: 13.5px; }
+  .examples { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+  .examples h4 { margin: 0 0 6px; font-size: 12.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  .chip { display: block; width: 100%; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px; margin-bottom: 6px; color: var(--ink); font-size: 13.5px; }
+  .chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+  .loading { display: flex; gap: 16px; align-items: flex-start; margin-top: 18px; }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .steps { margin: 6px 0 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
+
+  .answer-card { margin-top: 18px; }
+  .answer-text { font-size: 16.5px; line-height: 1.7; }
+  .answer-text p { margin: 0 0 8px; }
+  .ref { display: inline-block; min-width: 20px; height: 20px; padding: 0 5px; margin-left: 3px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-size: 11.5px; font-weight: 700; line-height: 20px; text-align: center; vertical-align: 2px; border: 0; }
+  .ref:hover { background: var(--accent); color: #fff; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .tag { font-size: 12.5px; padding: 4px 10px; border-radius: 20px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
+  .tag.good { background: var(--good-soft); border-color: #CBE7D5; color: var(--good); }
+  .tag.blue { background: var(--accent-soft); border-color: #D3DFF7; color: var(--accent); }
+  .refusal { background: var(--warn-soft); border: 1px solid #F3D9AC; border-radius: 10px; padding: 14px 16px; }
+  .refusal strong { color: var(--warn); }
+
+  .grid2 { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; margin-top: 18px; }
+  .graph-box { position: relative; }
+  svg.graph { width: 100%; height: 460px; display: block; background: #FBFCFE; border: 1px solid var(--line); border-radius: 10px; touch-action: none; }
+  svg.graph text { font-family: inherit; pointer-events: none; }
+  .node circle { cursor: grab; stroke: #fff; stroke-width: 2; }
+  .node.dim, .edge.dim { opacity: .15; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 5px; vertical-align: -1px; }
+  .empty { display: grid; place-items: center; height: 200px; color: var(--muted); text-align: center; padding: 20px; border: 1px dashed var(--line); border-radius: 10px; background: #FBFCFE; }
+
+  .source { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: #fff; }
+  .source.flash { box-shadow: 0 0 0 3px var(--accent); }
+  .source-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .source-head .ref { margin: 0; }
+  .fact { font-weight: 600; margin-bottom: 4px; }
+  .quote { font-style: italic; color: #39424F; font-size: 14px; border-left: 3px solid var(--line); padding-left: 10px; margin: 6px 0 8px; }
+  .linkbtn { background: none; border: 0; color: var(--accent); padding: 0; font-size: 13px; font-weight: 600; }
+  .toggle { margin-top: 4px; }
+
+  /* explore */
+  .explore-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .explore-bar input { flex: 1; min-width: 220px; font: inherit; padding: 11px 13px; border: 1.5px solid var(--line); border-radius: 10px; }
+  .quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 10px; }
+  .filter { font-size: 12.5px; padding: 5px 11px; border-radius: 20px; border: 1px solid var(--line); background: #fff; color: var(--muted); }
+  .filter[aria-pressed="true"] { background: var(--accent-soft); border-color: #C9D8F5; color: var(--accent); font-weight: 600; }
+  .fact-group h4 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+
+  /* how it works */
+  .steps-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+  .num { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; margin-bottom: 8px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14px; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+  .box-bad { border-left: 4px solid var(--bad); } .box-good { border-left: 4px solid var(--good); }
+  .arch { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+
+  /* results */
+  .bars { display: grid; gap: 16px; }
+  .bar-row .label { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px; }
+  .bar { height: 22px; border-radius: 6px; background: var(--bg); position: relative; margin-bottom: 4px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; color: #fff; font-size: 12px; font-weight: 700; min-width: 34px; }
+  .bar .v { background: #9AA7B8; } .bar .h { background: var(--accent); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; text-align: center; box-shadow: var(--shadow); }
+  .kpi b { display: block; font-size: 24px; color: var(--accent); }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+  table.plain { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.plain td, table.plain th { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+  .note { background: var(--warn-soft); border: 1px solid #F3D9AC; border-radius: 10px; padding: 12px 14px; font-size: 13.5px; margin-top: 16px; }
+
+  /* modal */
+  dialog { border: 0; border-radius: 14px; padding: 0; width: min(760px, 94vw); box-shadow: 0 20px 60px rgba(0,0,0,.25); color: var(--ink); }
+  dialog::backdrop { background: rgba(20,28,40,.45); }
+  .modal-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: flex-start; }
+  .modal-head h3 { margin: 0; } .modal-head p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+  .modal-head button { margin-left: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; }
+  .modal-body { padding: 16px 20px 20px; max-height: 62vh; overflow: auto; white-space: pre-wrap; font-size: 14.5px; line-height: 1.65; }
+  mark { background: #FFE58A; padding: 1px 0; border-radius: 3px; }
+
+  @media (max-width: 900px) {
+    .grid2, .compare { grid-template-columns: 1fr; }
+    .examples { grid-template-columns: 1fr; }
+    .steps-grid, .kpis { grid-template-columns: 1fr 1fr; }
+    .status { margin-left: 0; width: 100%; }
+    svg.graph { height: 380px; }
+  }
+  @media (max-width: 520px) {
+    .askbox { flex-direction: column; } .btn { padding: 12px; }
+    .steps-grid, .kpis { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="top">
+      <div class="logo" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.5 6h9M6.3 8.2l4.4 7.6M17.7 8.2l-4.4 7.6"/></svg>
+      </div>
+      <div class="brand">
+        <h1>Filing Explorer</h1>
+        <p>Ask about NVIDIA, AMD, Intel, Micron and Applied Materials. Every answer comes with proof from their annual reports.</p>
+      </div>
+      <div class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Connecting…</span></div>
+    </div>
+    <nav role="tablist" aria-label="Sections">
+      <button role="tab" aria-selected="true" aria-controls="tab-ask" id="t-ask">Ask a question</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-explore" id="t-explore">Explore the map</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-how" id="t-how">How it works</button>
+      <button role="tab" aria-selected="false" aria-controls="tab-results" id="t-results">Results</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<!-- ================= ASK ================= -->
+<section role="tabpanel" id="tab-ask" aria-labelledby="t-ask">
+  <div class="card">
+    <form class="askbox" id="askForm">
+      <input id="question" type="text" autocomplete="off" maxlength="500"
+             placeholder="Ask anything about these five companies…" aria-label="Your question">
+      <button class="btn" id="askBtn" type="submit">Ask</button>
+    </form>
+    <div class="examples">
+      <div>
+        <h4>Connects facts across reports</h4>
+        <button class="chip" data-q="Who supplies the competitors of Micron's customers?">Who supplies the competitors of Micron's customers?</button>
+        <button class="chip" data-q="Which companies have NVIDIA's competitors acquired?">Which companies have NVIDIA's competitors acquired?</button>
+        <button class="chip" data-q="Which suppliers do NVIDIA and AMD share?">Which suppliers do NVIDIA and AMD share?</button>
+      </div>
+      <div>
+        <h4>A single fact</h4>
+        <button class="chip" data-q="By what percentage did NVIDIA's data center networking revenue grow?">By what percentage did NVIDIA's data center networking revenue grow?</button>
+        <button class="chip" data-q="Which company is the sole supplier of the EUV lithography tools Intel uses?">Who is the sole supplier of Intel's EUV lithography tools?</button>
+        <button class="chip" data-q="How much did Mobileye agree to pay for Mentee Robotics?">How much did Mobileye agree to pay for Mentee Robotics?</button>
+      </div>
+      <div>
+        <h4>Not in the reports (it should refuse)</h4>
+        <button class="chip" data-q="Who is the CEO of Tesla?">Who is the CEO of Tesla?</button>
+        <button class="chip" data-q="What is the capital of France?">What is the capital of France?</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="askLoading" class="card loading" hidden aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <div>
+      <strong>Working on it. This usually takes 10 to 20 seconds.</strong>
+      <ol class="steps">
+        <li>Reading the question and deciding where to look: the relationship map, the report text, or both</li>
+        <li>Looking up the facts and the sentences that support them</li>
+        <li>Writing an answer that cites a source for every statement</li>
+        <li>Checking every citation and number against the sources; anything unsupported is rejected</li>
+      </ol>
+    </div>
+  </div>
+
+  <div id="askError" class="card answer-card" hidden role="alert"></div>
+
+  <div id="askResult" hidden>
+    <div class="card answer-card" aria-live="polite">
+      <h2>Answer</h2>
+      <div id="answerText" class="answer-text"></div>
+      <div class="meta" id="answerMeta"></div>
+    </div>
+    <div class="grid2">
+      <div class="card graph-box">
+        <h2>How the facts connect</h2>
+        <p class="muted small" id="graphHint" style="margin-top:-6px">Each line is a fact found in a report. Hover a dot to highlight its links; drag dots to rearrange.</p>
+        <div id="answerGraph"></div>
+        <div class="legend" id="answerLegend"></div>
+        <label class="small muted toggle" id="graphAllWrap" hidden><input type="checkbox" id="graphAll"> Also show facts it looked at but didn't use</label>
+      </div>
+      <div class="card">
+        <h2>Sources</h2>
+        <p class="muted small" style="margin-top:-6px">The exact sentences from the annual reports that back up the answer.</p>
+        <div id="sourceList"></div>
+        <button class="linkbtn toggle" id="moreSources" hidden></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EXPLORE ================= -->
+<section role="tabpanel" id="tab-explore" aria-labelledby="t-explore" hidden>
+  <div class="card">
+    <h2>Explore the relationship map</h2>
+    <p class="muted" style="margin-top:-4px">The system read the five annual reports and recorded who supplies, competes with, partners with or bought whom. Pick a company or anything else to see its connections.</p>
+    <form class="explore-bar" id="exploreForm">
+      <input id="exploreInput" list="entityList" placeholder="Type a name, e.g. TSMC, Samsung, Mobileye…" aria-label="Entity name">
+      <datalist id="entityList"></datalist>
+      <button class="btn" type="submit" style="padding:11px 20px">Show</button>
+    </form>
+    <div class="quick" id="quickPicks"></div>
+  </div>
+  <div id="exploreResult" hidden>
+    <div class="grid2">
+      <div class="card">
+        <h2 id="exploreTitle"></h2>
+        <div class="filters" id="exploreFilters"></div>
+        <p class="muted small" style="margin:-4px 0 8px">Hover a dot to see how it is connected; drag dots to rearrange.</p>
+        <div id="exploreGraph"></div>
+        <div class="legend" id="exploreLegend"></div>
+      </div>
+      <div class="card">
+        <h2>The facts, with their proof</h2>
+        <div id="exploreFacts"></div>
+      </div>
+    </div>
+  </div>
+  <div id="exploreError" class="card answer-card" hidden role="alert"></div>
+</section>
+
+<!-- ================= HOW IT WORKS ================= -->
+<section role="tabpanel" id="tab-how" aria-labelledby="t-how" hidden>
+  <div class="card">
+    <h2>The problem</h2>
+    <p>Some questions can't be answered from any single page. <i>"Who supplies the competitors of Micron's customers?"</i> needs three facts that sit in three different annual reports. Ordinary AI search reads the few passages that best match the question, so it never sees the whole chain, and it scored <b>0%</b> on questions like this.</p>
+    <div class="compare">
+      <div class="card box-bad">
+        <h3>Ordinary AI search</h3>
+        <p class="muted" style="margin:0">Like a librarian who finds you the best-matching <i>page</i>. Great for single facts, lost when the answer is spread across several reports.</p>
+      </div>
+      <div class="card box-good">
+        <h3>This system</h3>
+        <p class="muted" style="margin:0">Like a detective with a wall of photos and red strings. It knows how everyone is connected, follows the strings, and shows you the sentence behind each one.</p>
+      </div>
+    </div>
+    <h3 style="margin-top:18px">The example question, as the system sees it</h3>
+    <div id="howGraph"></div>
+    <p class="muted small">Micron supplies NVIDIA (from NVIDIA's report) → Intel and AMD compete with NVIDIA (NVIDIA's report) → TSMC, ASML and others supply Intel and AMD (Intel's and AMD's reports).</p>
+  </div>
+
+  <h2 style="margin:26px 0 12px">What happens, step by step</h2>
+  <div class="steps-grid">
+    <div class="step"><div class="num">1</div><h3>Read the reports</h3><p>Each annual report is split into short passages. An AI reads every passage and lists the relationships it states, keeping the exact sentence as proof. Anything it can't quote is thrown away.</p></div>
+    <div class="step"><div class="num">2</div><h3>Draw the map</h3><p>"TSMC", "Taiwan Semiconductor" and "Taiwan Semiconductor Manufacturing Company Limited" are merged into one dot. The result is a map of 424 people, companies and products, and 454 links.</p></div>
+    <div class="step"><div class="num">3</div><h3>Pick where to look</h3><p>For each question, a quick AI step decides: follow the map (connection questions), search the report text (single facts), or both when unsure.</p></div>
+    <div class="step"><div class="num">4</div><h3>Answer, then check</h3><p>The answer must cite a source for every statement. Citations that weren't really found, or numbers not in the source, are rejected and the answer is rewritten. If the reports don't say it, it refuses.</p></div>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <h2>Technical view</h2>
+    <p class="muted small" style="margin-top:-6px">The same pipeline as an engineer would draw it.</p>
+    <img class="arch" src="/assets/architecture.svg" alt="Architecture diagram: ingestion builds a Neo4j graph and a pgvector index sharing chunk ids; queries are routed to graph templates or vector search and answered with checked citations">
+  </div>
+</section>
+
+<!-- ================= RESULTS ================= -->
+<section role="tabpanel" id="tab-results" aria-labelledby="t-results" hidden>
+  <div class="kpis">
+    <div class="kpi"><b>8% → 92%</b><span>questions linking 2 facts</span></div>
+    <div class="kpi"><b>0% → 50%</b><span>questions linking 3 facts</span></div>
+    <div class="kpi"><b>48% → 76%</b><span>all 50 test questions</span></div>
+    <div class="kpi"><b>$0.82</b><span>AI cost to build the map</span></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h2>Correct answers by question type</h2>
+      <p class="muted small" style="margin-top:-6px">50 test questions. Both systems use the same AI and the same citation checks; only how they look things up differs.</p>
+      <div class="legend" style="margin-bottom:12px"><span style="--c:#9AA7B8">Ordinary AI search</span><span style="--c:var(--accent)">This system</span></div>
+      <div class="bars" id="bars"></div>
+    </div>
+    <div class="card">
+      <h2>What it costs</h2>
+      <table class="plain">
+        <tr><th></th><th>Ordinary search</th><th>This system</th></tr>
+        <tr><td>Typical wait</td><td>6 s</td><td>12 s</td></tr>
+        <tr><td>Slowest 5% of questions</td><td>12 s</td><td>18 s</td></tr>
+        <tr><td>Cost per question*</td><td>$0.0022</td><td>$0.0025</td></tr>
+        <tr><td>One-time setup</td><td>free</td><td>$0.82 to build the map</td></tr>
+      </table>
+      <p class="muted small">*At paid prices; the project ran on a free tier.</p>
+      <h3 style="margin-top:16px">Where it still goes wrong</h3>
+      <ul class="small" style="padding-left:18px;margin:0">
+        <li>Sometimes it reads a chain backwards (customers vs. suppliers), finds nothing, and falls back to text search.</li>
+        <li>Questions like "which supplier serves <i>all three</i>" need a kind of lookup it doesn't have yet.</li>
+        <li>When search misses the right passage, it refuses rather than guess.</li>
+      </ul>
+      <div class="note"><b>Honest caveat:</b> the test questions were written by the developer with the map available, which favours this system. A blind test would likely show a smaller gap.</div>
+    </div>
+  </div>
+</section>
+</main>
+
+<dialog id="modal" aria-labelledby="modalTitle">
+  <div class="modal-head">
+    <div><h3 id="modalTitle"></h3><p id="modalSub"></p></div>
+    <button type="button" id="modalClose">Close</button>
+  </div>
+  <div class="modal-body" id="modalBody"></div>
+</dialog>
+
+<script>
+"use strict";
+/* ---------- plain-language helpers ---------- */
+const COMPANIES = { NVDA: "NVIDIA", AMD: "AMD", INTC: "Intel", MU: "Micron", AMAT: "Applied Materials" };
+const SECTIONS = { "1": "Business overview", "1A": "Risk factors", "7": "Management's discussion" };
+const VERB = {
+  SUPPLIES: "supplies", COMPETES_WITH: "competes with", PARTNERS_WITH: "partners with",
+  SUBSIDIARY_OF: "is owned by", ACQUIRED: "acquired", EXECUTIVE_OF: "is an executive at",
+  PRODUCES: "makes", USES_TECHNOLOGY: "uses", SERVES_MARKET: "sells into",
+  OPERATES_IN: "operates in", SUBJECT_TO: "is subject to"
+};
+const GROUP = {
+  SUPPLIES: "Suppliers and customers", COMPETES_WITH: "Competitors", PARTNERS_WITH: "Partners",
+  SUBSIDIARY_OF: "Ownership", ACQUIRED: "Acquisitions", EXECUTIVE_OF: "People",
+  PRODUCES: "Products", USES_TECHNOLOGY: "Technologies", SERVES_MARKET: "Markets",
+  OPERATES_IN: "Locations", SUBJECT_TO: "Laws and regulations"
+};
+const UNDIRECTED = new Set(["COMPETES_WITH", "PARTNERS_WITH"]);
+const TYPE_COLOR = {
+  Company: "#2F5FC4", Person: "#8E44AD", Product: "#D98A1C", Technology: "#16A085",
+  Market: "#C2457A", Location: "#7F8C8D", Regulation: "#A07A00"
+};
+const SHORT = {
+  "Taiwan Semiconductor Manufacturing Company Limited": "TSMC", "Advanced Micro Devices, Inc.": "AMD",
+  "United Microelectronics Corporation": "UMC", "GLOBALFOUNDRIES Inc.": "GlobalFoundries",
+  "Siliconware Precision Industries Ltd.": "SPIL", "King Yuan Electronics Company": "KYEC",
+  "Hon Hai Precision Industry Co., Ltd.": "Foxconn (Hon Hai)", "NVIDIA Corporation": "NVIDIA",
+  "Intel Corporation": "Intel", "Micron Technology, Inc.": "Micron", "Applied Materials, Inc.": "Applied Materials",
+  "Samsung Electronics Co., Ltd.": "Samsung", "ASML Holding N.V.": "ASML"
+};
+function shortName(n) {
+  if (SHORT[n]) return SHORT[n];
+  let s = n.replace(/,? (Inc\.?|Incorporated|Corporation|Corp\.?|Co\., Ltd\.|Ltd\.?|Limited|N\.V\.|LLC|plc)$/i, "");
+  return s.length > 26 ? s.slice(0, 24) + "…" : s;
+}
+function describeChunk(id) {
+  // "NVDA-10K-2026-01-25:1A:0011" -> NVIDIA annual report (year ended Jan 2026), Risk factors
+  const m = /^([A-Z]+)-10K-(\d{4})-(\d{2})-\d{2}:([0-9A]+):(\d+)$/.exec(id || "");
+  if (!m) return { title: id, sub: "" };
+  const month = new Date(+m[2], +m[3] - 1, 1).toLocaleString("en", { month: "short" });
+  return {
+    title: `${COMPANIES[m[1]] || m[1]} annual report`,
+    sub: `Year ended ${month} ${m[2]} · ${SECTIONS[m[4]] || "Item " + m[4]} · passage ${+m[5] + 1}`
+  };
+}
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const $ = id => document.getElementById(id);
+
+/* ---------- tabs ---------- */
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+function selectTab(tab) {
+  tabs.forEach(t => {
+    const on = t === tab;
+    t.setAttribute("aria-selected", on);
+    $(t.getAttribute("aria-controls")).hidden = !on;
+  });
+  if (tab.id === "t-how") drawHowGraph();
+}
+tabs.forEach(t => t.addEventListener("click", () => selectTab(t)));
+
+/* ---------- health ---------- */
+fetch("/health").then(r => r.json()).then(h => {
+  $("statusDot").className = "dot " + (h.ok ? "ok" : "err");
+  $("statusText").textContent = h.ok
+    ? `Connected · map of ${h.neo4j_entities} items · ${h.postgres_chunks} report passages`
+    : "A database is not reachable";
+}).catch(() => { $("statusDot").className = "dot err"; $("statusText").textContent = "Server not reachable"; });
+
+/* ---------- graph drawing (small force layout, no libraries) ---------- */
+function drawGraph(container, edges, opts = {}) {
+  container.innerHTML = "";
+  if (!edges.length) {
+    container.innerHTML = `<div class="empty">${esc(opts.emptyText || "Nothing to draw.")}</div>`;
+    return;
+  }
+  const W = 760, H = 460;
+  const nodes = new Map();
+  const node = (name, type) => {
+    if (!nodes.has(name)) nodes.set(name, { name, type: type || "Company", deg: 0 });
+    const n = nodes.get(name);
+    if (type && n.type === "Company" && type !== "Company") n.type = type;
+    return n;
+  };
+  const links = edges.map(e => {
+    const s = node(e.source, e.source_type), t = node(e.target, e.target_type);
+    s.deg++; t.deg++;
+    return { e, s, t, faded: !!e.faded };
+  });
+  const list = [...nodes.values()];
+  const layered = !!opts.root && nodes.has(opts.root);
+  if (layered) {
+    // Chains read left to right: column = number of hops from the starting entity.
+    const adj = new Map(list.map(n => [n, []]));
+    links.forEach(({ s, t }) => { adj.get(s).push(t); adj.get(t).push(s); });
+    const root = nodes.get(opts.root), depth = new Map([[root, 0]]), queue = [root];
+    while (queue.length) { const n = queue.shift(); adj.get(n).forEach(m => { if (!depth.has(m)) { depth.set(m, depth.get(n) + 1); queue.push(m); } }); }
+    const maxD = Math.max(...depth.values(), 1);
+    const cols = {};
+    list.forEach(n => { const d = depth.has(n) ? depth.get(n) : maxD; (cols[d] = cols[d] || []).push(n); n.layer = d; });
+    Object.values(cols).forEach(col => col.forEach((n, i) => {
+      n.x = (n.layer / maxD) * W; n.y = ((i + 1) / (col.length + 1)) * H;
+    }));
+  } else {
+    // Stars and webs: start on a circle, the focus entity pinned in the middle.
+    list.forEach((n, i) => {
+      const a = (2 * Math.PI * i) / list.length;
+      n.x = W / 2 + Math.cos(a) * W * 0.32; n.y = H / 2 + Math.sin(a) * H * 0.32;
+      if (opts.focus && n.name === opts.focus) { n.x = W / 2; n.y = H / 2; n.fixed = true; }
+    });
+  }
+  // Fruchterman-Reingold (in layered mode only vertical spacing is relaxed)
+  const k = Math.sqrt((W * H) / Math.max(list.length, 1)) * 0.75;
+  let temp = W / 8;
+  for (let it = 0; it < (layered ? 120 : 320); it++) {
+    list.forEach(n => { n.dx = 0; n.dy = 0; });
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      let dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || 0.01;
+      const f = (k * k) / d;
+      a.dx += (dx / d) * f; a.dy += (dy / d) * f; b.dx -= (dx / d) * f; b.dy -= (dy / d) * f;
+    }
+    links.forEach(({ s, t }) => {
+      let dx = s.x - t.x, dy = s.y - t.y, d = Math.hypot(dx, dy) || 0.01;
+      const f = (d * d) / k;
+      s.dx -= (dx / d) * f; s.dy -= (dy / d) * f; t.dx += (dx / d) * f; t.dy += (dy / d) * f;
+    });
+    list.forEach(n => {
+      n.dx += (W / 2 - n.x) * 0.02; n.dy += (H / 2 - n.y) * 0.02;   // gentle pull to centre
+      if (n.fixed) return;
+      if (layered) n.dx = 0;   // keep each entity in its hop column
+      const d = Math.hypot(n.dx, n.dy) || 0.01;
+      n.x += (n.dx / d) * Math.min(d, temp); n.y += (n.dy / d) * Math.min(d, temp);
+    });
+    temp *= 0.985;
+  }
+  // Fit into the view, scaling each axis on its own so the drawing fills the box.
+  const padX = 70, padY = 45;
+  const xs = list.map(n => n.x), ys = list.map(n => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const spanX = maxX - minX, spanY = maxY - minY;
+  const sx = spanX < 1 ? 0 : Math.min((W - 2 * padX) / spanX, 2.5);
+  const sy = spanY < 1 ? 0 : Math.min((H - 2 * padY) / spanY, 2.5);
+  list.forEach(n => {
+    n.x = W / 2 + (n.x - (minX + spanX / 2)) * sx;
+    n.y = H / 2 + (n.y - (minY + spanY / 2)) * sy;
+  });
+
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.setAttribute("class", "graph");
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", opts.label || "Relationship diagram");
+  const uid = Math.random().toString(36).slice(2, 7);
+  svg.innerHTML = `<defs>
+    <marker id="a${uid}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#5B6675"/></marker>
+    <marker id="b${uid}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#2F5FC4"/></marker></defs>`;
+  const gEdges = document.createElementNS(NS, "g"), gNodes = document.createElementNS(NS, "g");
+  svg.append(gEdges, gNodes);
+  const radius = n => Math.min(11 + n.deg * 1.6, 20) + (opts.focus === n.name ? 4 : 0);
+  // With many links, edge labels pile up around the hub: show them only on hover.
+  const busy = links.length > 14;
+
+  links.forEach(l => {
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "edge");
+    const line = document.createElementNS(NS, "line");
+    const strong = !l.faded;
+    line.setAttribute("stroke", strong ? "#2F5FC4" : "#B9C2CF");
+    line.setAttribute("stroke-width", strong ? 2 : 1.3);
+    if (!strong) line.setAttribute("stroke-dasharray", "4 4");
+    if (!UNDIRECTED.has(l.e.relation)) line.setAttribute("marker-end", `url(#${strong ? "b" : "a"}${uid})`);
+    const label = document.createElementNS(NS, "text");
+    label.textContent = VERB[l.e.relation] || l.e.relation;
+    label.setAttribute("font-size", "13");
+    label.setAttribute("fill", strong ? "#2F5FC4" : "#8A95A5");
+    label.setAttribute("text-anchor", "middle");
+    label.setAttribute("paint-order", "stroke");
+    label.setAttribute("stroke", "#FBFCFE"); label.setAttribute("stroke-width", "4");
+    if (busy) label.style.display = "none";
+    g.append(line, label);
+    gEdges.append(g);
+    l.el = { g, line, label };
+  });
+  list.forEach(n => {
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "node");
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("r", radius(n));
+    c.setAttribute("fill", TYPE_COLOR[n.type] || "#2F5FC4");
+    const title = document.createElementNS(NS, "title");
+    title.textContent = `${n.name} (${n.type})`;
+    c.append(title);
+    const t = document.createElementNS(NS, "text");
+    t.textContent = shortName(n.name);
+    t.setAttribute("font-size", opts.focus === n.name ? "17" : "15");
+    t.setAttribute("font-weight", opts.focus === n.name ? "700" : "600");
+    t.setAttribute("fill", "#1A2230");
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("paint-order", "stroke");
+    t.setAttribute("stroke", "#FBFCFE"); t.setAttribute("stroke-width", "4");
+    g.append(c, t);
+    gNodes.append(g);
+    n.el = { g, c, t };
+    // hover: highlight neighbours
+    g.addEventListener("pointerenter", () => {
+      const near = new Set([n]);
+      links.forEach(l => { if (l.s === n || l.t === n) { near.add(l.s); near.add(l.t); } });
+      list.forEach(m => m.el.g.classList.toggle("dim", !near.has(m)));
+      links.forEach(l => {
+        const mine = l.s === n || l.t === n;
+        l.el.g.classList.toggle("dim", !mine);
+        if (busy) l.el.label.style.display = mine ? "" : "none";
+      });
+    });
+    g.addEventListener("pointerleave", () => {
+      list.forEach(m => m.el.g.classList.remove("dim"));
+      links.forEach(l => { l.el.g.classList.remove("dim"); if (busy) l.el.label.style.display = "none"; });
+    });
+    // drag
+    c.addEventListener("pointerdown", ev => {
+      ev.preventDefault(); c.setPointerCapture(ev.pointerId);
+      const move = e => {
+        const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+        const p = pt.matrixTransform(svg.getScreenCTM().inverse());
+        n.x = Math.max(20, Math.min(W - 20, p.x)); n.y = Math.max(20, Math.min(H - 20, p.y));
+        place();
+      };
+      const up = () => { c.removeEventListener("pointermove", move); c.removeEventListener("pointerup", up); };
+      c.addEventListener("pointermove", move); c.addEventListener("pointerup", up);
+    });
+  });
+  function place() {
+    links.forEach(({ s, t, el }) => {
+      const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy) || 1;
+      const rs = radius(s) + 2, rt = radius(t) + 4;
+      el.line.setAttribute("x1", s.x + (dx / d) * rs); el.line.setAttribute("y1", s.y + (dy / d) * rs);
+      el.line.setAttribute("x2", t.x - (dx / d) * rt); el.line.setAttribute("y2", t.y - (dy / d) * rt);
+      el.label.setAttribute("x", (s.x + t.x) / 2); el.label.setAttribute("y", (s.y + t.y) / 2 - 5);
+    });
+    list.forEach(n => {
+      n.el.c.setAttribute("cx", n.x); n.el.c.setAttribute("cy", n.y);
+      n.el.t.setAttribute("x", n.x); n.el.t.setAttribute("y", n.y + radius(n) + 18);
+    });
+  }
+  place();
+  container.append(svg);
+  return [...new Set(list.map(n => n.type))];
+}
+function drawLegend(el, types) {
+  el.innerHTML = (types || []).map(t => `<span style="--c:${TYPE_COLOR[t] || "#2F5FC4"}">${esc(t)}</span>`).join("");
+}
+
+/* ---------- source text modal ---------- */
+async function openPassage(chunkId, quote) {
+  const d = describeChunk(chunkId);
+  $("modalTitle").textContent = d.title;
+  $("modalSub").textContent = d.sub;
+  $("modalBody").textContent = "Loading…";
+  $("modal").showModal();
+  try {
+    const r = await fetch("/chunks/" + encodeURIComponent(chunkId));
+    if (!r.ok) throw new Error();
+    const c = await r.json();
+    const text = c.text.replace(/\s*\n\s*/g, "\n");
+    let html = esc(text);
+    if (quote) {
+      // highlight the supporting sentence (whitespace-insensitive)
+      const words = quote.trim().split(/\s+/).slice(0, 40).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      const re = new RegExp(words.map(w => esc(w).replace(/&amp;/g, "&amp;")).join("\\s+"), "i");
+      html = html.replace(re, m => `<mark>${m}</mark>`);
+    }
+    $("modalBody").innerHTML = html;
+    const mk = $("modalBody").querySelector("mark");
+    if (mk) mk.scrollIntoView({ block: "center" });
+  } catch {
+    $("modalBody").textContent = "Could not load this passage.";
+  }
+}
+$("modalClose").addEventListener("click", () => $("modal").close());
+$("modal").addEventListener("click", e => { if (e.target === $("modal")) $("modal").close(); });
+
+/* ---------- ask ---------- */
+let lastAnswer = null;
+document.querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => {
+  $("question").value = b.dataset.q; ask();
+}));
+$("askForm").addEventListener("submit", e => { e.preventDefault(); ask(); });
+
+async function ask() {
+  const q = $("question").value.trim();
+  if (q.length < 3) { $("question").focus(); return; }
+  $("askBtn").disabled = true;
+  $("askError").hidden = true; $("askResult").hidden = true; $("askLoading").hidden = false;
+  try {
+    const r = await fetch("/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) });
+    if (r.status === 503) throw new Error("The free daily AI limit has been reached. Please try again tomorrow.");
+    if (!r.ok) throw new Error("Something went wrong on the server (" + r.status + ").");
+    lastAnswer = await r.json();
+    showAnswer(lastAnswer);
+  } catch (err) {
+    $("askError").innerHTML = `<div class="refusal"><strong>Couldn't get an answer.</strong> ${esc(err.message || "The server is not reachable. Is it running?")}</div>`;
+    $("askError").hidden = false;
+  } finally {
+    $("askLoading").hidden = true; $("askBtn").disabled = false;
+  }
+}
+
+function showAnswer(a) {
+  // number cited sources 1..n in order of first use
+  const order = [];
+  a.claims.forEach(c => c.citations.forEach(ci => { if (!order.includes(ci.source_id)) order.push(ci.source_id); }));
+  const num = id => order.indexOf(id) + 1;
+  const byId = Object.fromEntries((a.sources || []).map(s => [s.id, s]));
+
+  if (a.answerable) {
+    $("answerText").innerHTML = a.claims.map(c =>
+      `<p>${esc(c.text)}${[...new Set(c.citations.map(ci => ci.source_id))].map(id =>
+        `<button class="ref" data-src="${esc(id)}" title="Show source ${num(id)}">${num(id)}</button>`).join("")}</p>`).join("");
+  } else {
+    $("answerText").innerHTML = `<div class="refusal"><strong>Not in these reports.</strong> This system only answers from the annual reports of NVIDIA, AMD, Intel, Micron and Applied Materials. It found nothing that answers this, so it says so instead of guessing.</div>`;
+  }
+
+  const route = {
+    GRAPH: "Followed the relationship map", VECTOR: "Searched the report text", BOTH: "Used the map and the text"
+  }[a.route_used] || a.route_used;
+  const checks = a.answerable
+    ? (a.attempts > 1 ? `First draft rejected by the checks, rewritten (${a.attempts} tries)` : "Every source checked ✓")
+    : "Refused rather than guess";
+  $("answerMeta").innerHTML = [
+    `<span class="tag blue">${esc(route)}</span>`,
+    `<span class="tag good">${esc(checks)}</span>`,
+    a.answerable ? `<span class="tag">${order.length} source${order.length === 1 ? "" : "s"}</span>` : "",
+    `<span class="tag">Took ${(a.latency_ms / 1000).toFixed(1)} s</span>`
+  ].join("");
+
+  // graph: cited facts, optionally everything retrieved
+  const graphSources = (a.sources || []).filter(s => s.kind === "graph" && s.edge);
+  const usedEdges = graphSources.filter(s => s.cited).map(s => s.edge);
+  const otherEdges = graphSources.filter(s => !s.cited).map(s => ({ ...s.edge, faded: true }));
+  // Start the drawing at the entity the question starts from ("...Micron's customers" -> Micron).
+  const ql = a.question.toLowerCase();
+  const names = [...new Set(usedEdges.flatMap(e => [e.source, e.target]))];
+  const pos = n => {
+    const keys = [shortName(n), n.split(/[ ,]/)[0]].map(k => k.toLowerCase()).filter(k => k.length > 2);
+    const hits = keys.map(k => ql.indexOf(k)).filter(i => i >= 0);
+    return hits.length ? Math.min(...hits) : Infinity;
+  };
+  const root = names.length ? names.reduce((best, n) => (pos(n) < pos(best) ? n : best), usedEdges[0].source) : null;
+  const renderAnswerGraph = () => {
+    const edges = $("graphAll").checked ? usedEdges.concat(otherEdges) : usedEdges;
+    const types = drawGraph($("answerGraph"), edges, {
+      root, label: "Facts used in the answer",
+      emptyText: a.route_used === "VECTOR" || !graphSources.length
+        ? "This answer came from searching the report text, not from the relationship map, so there are no connections to draw."
+        : "The answer didn't use any map facts."
+    });
+    drawLegend($("answerLegend"), types);
+  };
+  $("graphAll").checked = false;
+  $("graphAllWrap").hidden = !otherEdges.length;
+  $("graphAllWrap").lastChild.textContent = ` Also show ${otherEdges.length} fact${otherEdges.length === 1 ? "" : "s"} it looked at but didn't use (dashed)`;
+  $("graphAll").onchange = renderAnswerGraph;
+  renderAnswerGraph();
+  $("graphHint").hidden = !usedEdges.length;
+
+  // sources
+  const cited = order.map(id => byId[id]).filter(Boolean);
+  const unused = (a.sources || []).filter(s => !s.cited);
+  const renderSources = showAll => {
+    const list = showAll ? cited.concat(unused) : cited;
+    $("sourceList").innerHTML = list.length ? list.map(s => sourceCard(s, s.cited ? num(s.id) : null)).join("")
+      : `<div class="empty">No sources: nothing in the reports answered this question.</div>`;
+    $("sourceList").querySelectorAll("[data-chunk]").forEach(b =>
+      b.addEventListener("click", () => openPassage(b.dataset.chunk, b.dataset.quote)));
+  };
+  renderSources(false);
+  $("moreSources").hidden = !unused.length;
+  $("moreSources").textContent = `Show ${unused.length} more thing${unused.length === 1 ? "" : "s"} it looked at but didn't use`;
+  $("moreSources").onclick = () => { renderSources(true); $("moreSources").hidden = true; };
+
+  $("answerText").querySelectorAll(".ref").forEach(b => b.addEventListener("click", () => {
+    const el = document.querySelector(`.source[data-id="${CSS.escape(b.dataset.src)}"]`);
+    if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1400); }
+  }));
+  $("askResult").hidden = false;
+}
+
+function sourceCard(s, n) {
+  const chunk = s.chunk_ids[0];
+  const d = describeChunk(chunk);
+  const quote = s.kind === "graph" ? (s.evidence[0] || "") : s.text.slice(0, 320) + (s.text.length > 320 ? "…" : "");
+  const fact = s.kind === "graph" && s.edge
+    ? `<div class="fact">${esc(shortName(s.edge.source))} ${esc(VERB[s.edge.relation] || s.edge.relation)} ${esc(shortName(s.edge.target))}</div>` : "";
+  const extra = s.chunk_ids.length > 1 ? ` · also in ${s.chunk_ids.length - 1} other passage${s.chunk_ids.length > 2 ? "s" : ""}` : "";
+  return `<div class="source" data-id="${esc(s.id)}">
+    <div class="source-head">${n ? `<span class="ref">${n}</span>` : `<span class="tag">not used</span>`}
+      <span><b>${esc(d.title)}</b> · ${esc(d.sub)}${esc(extra)}</span></div>
+    ${fact}<div class="quote">"${esc(quote)}"</div>
+    <button class="linkbtn" data-chunk="${esc(chunk)}" data-quote="${esc(s.kind === "graph" ? (s.evidence[0] || "") : "")}">Read the original passage →</button>
+  </div>`;
+}
+
+/* ---------- explore ---------- */
+const QUICK = ["NVIDIA", "AMD", "Intel", "Micron", "Applied Materials", "TSMC", "Samsung", "Mobileye"];
+$("quickPicks").innerHTML = QUICK.map(q => `<button class="btn ghost" type="button" data-e="${esc(q)}">${esc(q)}</button>`).join("");
+$("quickPicks").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $("exploreInput").value = b.dataset.e; explore(); }));
+$("exploreForm").addEventListener("submit", e => { e.preventDefault(); explore(); });
+fetch("/entities").then(r => r.json()).then(list => {
+  $("entityList").innerHTML = list.slice(0, 400).map(e => `<option value="${esc(e.name)}">${esc(e.type)}</option>`).join("");
+}).catch(() => {});
+
+const KEY_RELS = new Set(["SUPPLIES", "COMPETES_WITH", "PARTNERS_WITH", "ACQUIRED", "SUBSIDIARY_OF", "EXECUTIVE_OF"]);
+let exploreData = null, activeRel = "KEY";
+async function explore() {
+  const name = $("exploreInput").value.trim();
+  if (name.length < 2) return;
+  $("exploreError").hidden = true;
+  try {
+    const r = await fetch("/graph/entity?name=" + encodeURIComponent(name));
+    if (r.status === 404) throw new Error(`Nothing called "${name}" was found in the reports.`);
+    if (!r.ok) throw new Error("The server couldn't load this.");
+    exploreData = await r.json();
+    // Open on the company-to-company links; fall back to everything when there are none.
+    activeRel = exploreData.edges.some(e => KEY_RELS.has(e.relation)) ? "KEY" : null;
+    renderExplore();
+    $("exploreResult").hidden = false;
+  } catch (err) {
+    $("exploreResult").hidden = true;
+    $("exploreError").innerHTML = `<div class="refusal"><strong>Not found.</strong> ${esc(err.message)}</div>`;
+    $("exploreError").hidden = false;
+  }
+}
+function renderExplore() {
+  const { entity, edges } = exploreData;
+  $("exploreTitle").textContent = `${shortName(entity.name)}: ${edges.length} fact${edges.length === 1 ? "" : "s"} in the reports`;
+  const counts = {};
+  edges.forEach(e => counts[e.relation] = (counts[e.relation] || 0) + 1);
+  const rels = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  const nKey = edges.filter(e => KEY_RELS.has(e.relation)).length;
+  $("exploreFilters").innerHTML =
+    (nKey ? `<button class="filter" aria-pressed="${activeRel === "KEY"}" data-r="KEY">Key relationships (${nKey})</button>` : "") +
+    `<button class="filter" aria-pressed="${activeRel === null}" data-r="">All (${edges.length})</button>` +
+    rels.map(r => `<button class="filter" aria-pressed="${activeRel === r}" data-r="${esc(r)}">${esc(GROUP[r] || r)} (${counts[r]})</button>`).join("");
+  $("exploreFilters").querySelectorAll(".filter").forEach(b => b.addEventListener("click", () => {
+    activeRel = b.dataset.r || null; renderExplore();
+  }));
+  const shown = activeRel === "KEY" ? edges.filter(e => KEY_RELS.has(e.relation))
+    : activeRel ? edges.filter(e => e.relation === activeRel) : edges;
+  const types = drawGraph($("exploreGraph"), shown, { focus: entity.name, label: `Connections of ${entity.name}` });
+  drawLegend($("exploreLegend"), types);
+
+  const groups = {};
+  shown.forEach(e => (groups[e.relation] = groups[e.relation] || []).push(e));
+  $("exploreFacts").innerHTML = Object.entries(groups).map(([rel, list]) => `<div class="fact-group"><h4>${esc(GROUP[rel] || rel)}</h4>` +
+    list.map(e => {
+      const d = describeChunk(e.chunk_ids[0]);
+      return `<div class="source"><div class="fact">${esc(shortName(e.source))} ${esc(VERB[e.relation] || e.relation)} ${esc(shortName(e.target))}</div>
+        <div class="quote">"${esc(e.evidence[0] || "")}"</div>
+        <div class="source-head" style="margin:0 0 4px">${esc(d.title)} · ${esc(d.sub)}</div>
+        <button class="linkbtn" data-chunk="${esc(e.chunk_ids[0])}" data-quote="${esc(e.evidence[0] || "")}">Read the original passage →</button></div>`;
+    }).join("") + `</div>`).join("");
+  $("exploreFacts").querySelectorAll("[data-chunk]").forEach(b =>
+    b.addEventListener("click", () => openPassage(b.dataset.chunk, b.dataset.quote)));
+}
+
+/* ---------- how it works: the example chain ---------- */
+let howDrawn = false;
+function drawHowGraph() {
+  if (howDrawn) return; howDrawn = true;
+  const C = "Company";
+  const e = (s, r, t) => ({ source: s, source_type: C, relation: r, target: t, target_type: C });
+  const types = drawGraph($("howGraph"), [
+    e("Micron", "SUPPLIES", "NVIDIA"), e("Intel", "COMPETES_WITH", "NVIDIA"), e("AMD", "COMPETES_WITH", "NVIDIA"),
+    e("ASML", "SUPPLIES", "Intel"), e("TSMC", "SUPPLIES", "Intel"), e("TSMC", "SUPPLIES", "AMD"),
+    e("GlobalFoundries", "SUPPLIES", "AMD"), e("UMC", "SUPPLIES", "AMD"), e("Samsung", "SUPPLIES", "AMD")
+  ], { root: "Micron", label: "Example chain: Micron supplies NVIDIA; Intel and AMD compete with NVIDIA; TSMC, ASML and others supply them" });
+}
+
+/* ---------- results bars ---------- */
+const RESULTS = [
+  ["A single fact", "e.g. \"What did Mobileye pay for Mentee Robotics?\"", 75, 75],
+  ["Linking 2 facts", "e.g. \"Which suppliers do NVIDIA and AMD share?\"", 8, 92],
+  ["Linking 3 facts", "e.g. \"Who supplies the competitors of Micron's customers?\"", 0, 50],
+  ["Lists and totals", "e.g. \"Which contract manufacturers does NVIDIA use?\"", 50, 50],
+  ["Not in the reports (refused)", "e.g. \"Who is the CEO of Tesla?\"", 100, 100],
+  ["All 50 questions", "", 48, 76]
+];
+$("bars").innerHTML = RESULTS.map(([label, ex, v, h]) => `<div class="bar-row">
+  <div class="label"><span><b>${esc(label)}</b> <span class="muted small">${esc(ex)}</span></span></div>
+  <div class="bar"><div class="v" style="width:${Math.max(v, 0.001)}%">${v}%</div></div>
+  <div class="bar"><div class="h" style="width:${h}%">${h}%</div></div></div>`).join("");
+</script>
+</body>
+</html>

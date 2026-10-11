@@ -37,7 +37,8 @@ class Direction(StrEnum):
 _ARROWS = {Direction.OUT: ("-[{r}]->"), Direction.IN: ("<-[{r}]-"), Direction.ANY: ("-[{r}]-")}
 
 # Shared projection: a path's relationships as citable edges.
-_EDGES = """[r IN relationships(p) | {source: startNode(r).name, relation: type(r), target: endNode(r).name,
+_EDGES = """[r IN relationships(p) | {source: startNode(r).name, source_type: startNode(r).type,
+             relation: type(r), target: endNode(r).name, target_type: endNode(r).type,
              chunk_ids: r.chunk_ids, evidence: r.evidence, confidence: r.confidence}]"""
 _REL_FILTER = "($rel IS NULL OR type({r}) = $rel)"
 LIMIT = 50
@@ -122,11 +123,11 @@ def count(entity_id: str | None, rel: RelationType | None, direction: Direction)
     return query, {"id": entity_id, "rel": _rel_param(rel)}
 
 
-def entity_profile(entity_id: str) -> tuple[str, dict]:
+def entity_profile(entity_id: str, limit: int = LIMIT) -> tuple[str, dict]:
     query = f"""
         MATCH p = (e:Entity {{id: $id}})-[r]-(n:Entity)
         RETURN {_EDGES} AS edges
-        ORDER BY r.confidence DESC, size(r.chunk_ids) DESC LIMIT {LIMIT}"""
+        ORDER BY r.confidence DESC, size(r.chunk_ids) DESC LIMIT {int(limit)}"""
     return query, {"id": entity_id}
 
 
