@@ -11,7 +11,7 @@ HOSTILE = "x'}) MATCH (n) DETACH DELETE n //"
 
 @pytest.mark.parametrize("query", [
     T.relations_of(HOSTILE, R.SUPPLIES, T.Direction.IN),
-    T.shared_neighbors(HOSTILE, HOSTILE, R.SUPPLIES, T.Direction.IN),
+    T.shared_neighbors([HOSTILE, HOSTILE, HOSTILE], R.SUPPLIES, T.Direction.IN),
     T.chain(HOSTILE, [(R.COMPETES_WITH, T.Direction.ANY), (R.SUPPLIES, T.Direction.IN)]),
     T.path_between(HOSTILE, HOSTILE),
     T.count(HOSTILE, None, T.Direction.ANY),
@@ -38,7 +38,7 @@ def test_template_needs_its_entities():
     assert build_graph_query(_decision(query_type="SHARED_NEIGHBORS"), [_link("company:nvidia")]) is None
     cypher, params = build_graph_query(_decision(query_type="SHARED_NEIGHBORS"),
                                        [_link("company:nvidia"), _link("company:amd")])
-    assert params == {"a": "company:nvidia", "b": "company:amd", "rel": "SUPPLIES"}
+    assert params == {"a0": "company:nvidia", "a1": "company:amd", "rel": "SUPPLIES"}
 
 
 def test_any_relation_becomes_null_parameter():
@@ -74,3 +74,20 @@ def test_three_hop_chain_builds_one_pattern_with_parameters():
 def test_chain_rejects_too_many_hops():
     with pytest.raises(ValueError):
         T.chain("x", [(None, T.Direction.ANY)] * 4)
+
+
+def test_shared_neighbors_takes_three_entities():
+    cypher, params = build_graph_query(_decision(query_type="SHARED_NEIGHBORS"),
+                                       [_link("company:nvidia"), _link("company:amd"), _link("company:intel")])
+    assert params["a2"] == "company:intel" and "p2 = (a2:Entity {id: $a2})<-[r2]-(n)" in cypher
+
+
+def test_reversed_variants_flip_directed_hops_fewest_first():
+    from kgrag.retrieval.retriever import reversed_variants
+
+    d = _decision(query_type="CHAIN", hops=[{"relation": "SUPPLIES", "direction": "in"},
+                                            {"relation": "COMPETES_WITH", "direction": "any"},
+                                            {"relation": "SUPPLIES", "direction": "in"}])
+    variants = reversed_variants(d)
+    dirs = [[h.direction.value for h in v.hops] for v, _ in variants]
+    assert dirs == [["out", "any", "in"], ["in", "any", "out"], ["out", "any", "out"]]  # "any" never flipped

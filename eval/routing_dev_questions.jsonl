@@ -1,0 +1,14 @@
+{"id": "d01", "question": "Which companies buy from TSMC?", "route": "GRAPH", "query_type": "RELATIONS_OF", "hops": ["SUPPLIES/out"]}
+{"id": "d02", "question": "Who are Samsung's customers?", "route": "GRAPH", "query_type": "RELATIONS_OF", "hops": ["SUPPLIES/out"]}
+{"id": "d03", "question": "What are the subsidiaries of Intel?", "route": "GRAPH", "query_type": "RELATIONS_OF", "hops": ["SUBSIDIARY_OF/in"]}
+{"id": "d04", "question": "Who owns Mobileye?", "route": "GRAPH", "query_type": "RELATIONS_OF", "hops": ["SUBSIDIARY_OF/out"]}
+{"id": "d05", "question": "Which company acquired Xilinx?", "route": "GRAPH", "query_type": "RELATIONS_OF", "hops": ["ACQUIRED/in"]}
+{"id": "d06", "question": "Who are the executives of NVIDIA?", "route": "GRAPH", "query_type": "RELATIONS_OF", "hops": ["EXECUTIVE_OF/in"]}
+{"id": "d07", "question": "Who supplies the customers of Samsung?", "route": "GRAPH", "query_type": "CHAIN", "hops": ["SUPPLIES/out", "SUPPLIES/in"]}
+{"id": "d08", "question": "What do the customers of Fabrinet make?", "route": "GRAPH", "query_type": "CHAIN", "hops": ["SUPPLIES/out", "PRODUCES/out"]}
+{"id": "d09", "question": "Who are the rivals of SK hynix's customers?", "route": "GRAPH", "query_type": "CHAIN", "hops": ["SUPPLIES/out", "COMPETES_WITH/any"]}
+{"id": "d10", "question": "Which markets does the parent company of Mobileye serve?", "route": "GRAPH", "query_type": "CHAIN", "hops": ["SUBSIDIARY_OF/out", "SERVES_MARKET/out"]}
+{"id": "d11", "question": "What does the company that acquired Mellanox produce?", "route": "GRAPH", "query_type": "CHAIN", "hops": ["ACQUIRED/in", "PRODUCES/out"]}
+{"id": "d12", "question": "Which technologies do Intel, AMD and NVIDIA all use?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS", "hops": ["USES_TECHNOLOGY/out"]}
+{"id": "d13", "question": "Which competitors do Micron and Intel have in common?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS", "hops": ["COMPETES_WITH/any"]}
+{"id": "d14", "question": "How much did NVIDIA pay to acquire Mellanox?", "route": "VECTOR", "query_type": "NONE"}

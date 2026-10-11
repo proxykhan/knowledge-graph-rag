@@ -79,6 +79,10 @@ def build_context(result: RetrievalResult) -> Context:
         return edge_ids.get(key, "")
 
     summaries = []
+    if result.direction_reversed:
+        summaries.append("[note] No facts matched the question as first read. The facts below were found with a "
+                         "relationship direction reversed (e.g. customers instead of suppliers). Read each fact's "
+                         "direction carefully; if they do not answer the question as asked, say it is not answerable.")
     for row in result.graph_rows:
         ids = [sid for sid in (add_edge(e) for e in row["edges"]) if sid]
         if "count" in row:  # COUNT template: an aggregate over the edges listed with it

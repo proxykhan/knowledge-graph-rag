@@ -1,15 +1,15 @@
-{"id": "q01", "category": "single_hop", "question": "Which companies does Micron name as its competitors in memory chips?"}
-{"id": "q02", "category": "single_hop", "question": "Who are Applied Materials' largest customers?"}
-{"id": "q03", "category": "single_hop", "question": "Which companies supply Micron with equipment or materials?"}
-{"id": "q04", "category": "two_hop", "question": "Which of NVIDIA's suppliers does Micron name as competitors?"}
-{"id": "q05", "category": "two_hop", "question": "Which companies that compete with Intel are also suppliers to NVIDIA?"}
-{"id": "q06", "category": "two_hop", "question": "Who manufactures chips for the company that makes EPYC processors?"}
-{"id": "q07", "category": "two_hop", "question": "Which companies compete with Applied Materials' customers?"}
-{"id": "q08", "category": "two_hop", "question": "What products does the company that owns Mobileye make?"}
-{"id": "q09", "category": "two_hop", "question": "Which companies compete with Micron's customers?"}
-{"id": "q10", "category": "two_hop", "question": "In which countries do AMD's suppliers operate?"}
-{"id": "q11", "category": "three_hop", "question": "Who makes the equipment used by the companies that manufacture chips for NVIDIA?"}
-{"id": "q12", "category": "three_hop", "question": "Who supplies the competitors of the company that acquired ZT Systems?"}
-{"id": "q13", "category": "three_hop", "question": "What do the competitors of NVIDIA's memory suppliers make?"}
-{"id": "q14", "category": "out_of_scope", "question": "How much revenue does TSMC earn from Apple?"}
-{"id": "q15", "category": "out_of_scope", "question": "Which company will NVIDIA acquire next year?"}
+{"id": "q01", "category": "single_hop", "category_as_written": "single_hop", "question": "Which companies does Micron name as its competitors in memory chips?", "required": [["Samsung"], ["SK hynix", "SK Hynix", "Hynix"], ["Kioxia"], ["Sandisk"]], "gold_source": "MU 1:0008 (Micron's competitor list)"}
+{"id": "q02", "category": "out_of_scope", "category_as_written": "single_hop", "question": "Who are Applied Materials' largest customers?", "required": [], "gold_source": "Applied Materials' Items 1/1A/7 never name its customers"}
+{"id": "q03", "category": "out_of_scope", "category_as_written": "single_hop", "question": "Which companies supply Micron with equipment or materials?", "required": [], "gold_source": "Micron's Items 1/1A/7 never name its suppliers"}
+{"id": "q04", "category": "two_hop", "category_as_written": "two_hop", "question": "Which of NVIDIA's suppliers does Micron name as competitors?", "required": [["Samsung"], ["SK hynix", "SK Hynix", "Hynix"]], "gold_source": "NVDA 1:0011 (memory suppliers) + MU 1:0008 (competitors)"}
+{"id": "q05", "category": "two_hop", "category_as_written": "two_hop", "question": "Which companies that compete with Intel are also suppliers to NVIDIA?", "required": [["TSMC", "Taiwan Semiconductor"], ["Samsung"]], "gold_source": "INTC 1A:0003 (foundry competitors) + NVDA 1:0011 (suppliers)"}
+{"id": "q06", "category": "two_hop", "category_as_written": "two_hop", "question": "Who manufactures chips for the company that makes EPYC processors?", "required": [["TSMC", "Taiwan Semiconductor"], ["GlobalFoundries", "GLOBALFOUNDRIES", "Global Foundries"]], "gold_source": "AMD 1:0005 (AMD makes EPYC) + AMD 1:0018 (its foundries)"}
+{"id": "q07", "category": "out_of_scope", "category_as_written": "two_hop", "question": "Which companies compete with Applied Materials' customers?", "required": [], "gold_source": "Applied Materials does not name its customers, so their competitors cannot be found"}
+{"id": "q08", "category": "two_hop", "category_as_written": "two_hop", "question": "What products does the company that owns Mobileye make?", "required": [["Xeon"], ["Core Ultra"]], "gold_source": "INTC 1:0008 (Intel owns 80% of Mobileye) + INTC 1:0001, 1:0004 (products)"}
+{"id": "q09", "category": "two_hop", "category_as_written": "two_hop", "question": "Which companies compete with Micron's customers?", "required": [["AMD", "Advanced Micro Devices"], ["Intel"]], "gold_source": "NVDA 1:0011 (buys memory from Micron) + NVDA 1:0012 (competitors)"}
+{"id": "q10", "category": "single_hop", "category_as_written": "two_hop", "question": "In which countries do AMD's suppliers operate?", "required": [["China"], ["Malaysia"], ["Taiwan"]], "gold_source": "AMD 1A:0054 states it in one sentence (written as two-hop)"}
+{"id": "q11", "category": "out_of_scope", "category_as_written": "three_hop", "question": "Who makes the equipment used by the companies that manufacture chips for NVIDIA?", "required": [], "gold_source": "No filing links equipment makers to the foundries that make NVIDIA's chips"}
+{"id": "q12", "category": "three_hop", "category_as_written": "three_hop", "question": "Who supplies the competitors of the company that acquired ZT Systems?", "required": [["TSMC", "Taiwan Semiconductor"], ["ASML"], ["SK hynix", "SK Hynix", "Hynix"]], "gold_source": "AMD 7:0002 (acquired ZT) + AMD 1:0016 (competes with Intel, NVIDIA) + INTC 1A:0026, NVDA 1:0011 (their suppliers)"}
+{"id": "q13", "category": "three_hop", "category_as_written": "three_hop", "question": "What do the competitors of NVIDIA's memory suppliers make?", "required": [["DRAM"], ["NAND"]], "gold_source": "NVDA 1:0011 (Samsung supplies memory) + MU 1:0008 (Micron competes with Samsung) + MU 1:0000 (Micron makes DRAM, NAND)"}
+{"id": "q14", "category": "out_of_scope", "category_as_written": "out_of_scope", "question": "How much revenue does TSMC earn from Apple?", "required": [], "gold_source": "TSMC and Apple are not filers in the corpus"}
+{"id": "q15", "category": "out_of_scope", "category_as_written": "out_of_scope", "question": "Which company will NVIDIA acquire next year?", "required": [], "gold_source": "a forecast; not in any filing"}

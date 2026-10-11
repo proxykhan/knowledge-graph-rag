@@ -15,6 +15,7 @@ Flow:
 import json
 import sys
 import time
+from itertools import combinations
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -45,6 +46,7 @@ class RetrievalResult:
     graph_rows: list[dict] = field(default_factory=list)
     passages: list[Passage] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)  # fallbacks and why
+    direction_reversed: bool = False   # facts were found only with a hop reversed; the answer step is told
     usage: llm.Usage = field(default_factory=llm.Usage)  # router tokens
 
 
@@ -62,7 +64,7 @@ def build_graph_query(decision: router.RouterDecision, links: list[Link]) -> tup
     if qt == QueryType.RELATIONS_OF and ids:
         return templates.relations_of(ids[0], rel, direction)
     if qt == QueryType.SHARED_NEIGHBORS and len(ids) >= 2:
-        return templates.shared_neighbors(ids[0], ids[1], rel, direction)
+        return templates.shared_neighbors(ids[:3], rel, direction)
     if qt == QueryType.CHAIN and ids:
         return templates.chain(ids[0], hops)
     if qt == QueryType.PATH_BETWEEN and len(ids) >= 2:
@@ -72,6 +74,27 @@ def build_graph_query(decision: router.RouterDecision, links: list[Link]) -> tup
     if qt == QueryType.ENTITY_PROFILE and ids:
         return templates.entity_profile(ids[0])
     return None
+
+
+_FLIP = {templates.Direction.OUT: templates.Direction.IN, templates.Direction.IN: templates.Direction.OUT}
+
+
+def reversed_variants(decision: router.RouterDecision) -> list[tuple[router.RouterDecision, str]]:
+    """Copies of the decision with hop directions reversed, fewest reversals first.
+
+    Routers most often misread direction in possessives ("Micron's customers" read as
+    "Micron's suppliers"). When the graph returns nothing, retrying the reversed reading is
+    cheap. Undirected hops (direction "any") are never touched.
+    """
+    flippable = [i for i, h in enumerate(decision.hops[:templates.MAX_HOPS]) if h.direction in _FLIP]
+    variants = []
+    for size in range(1, len(flippable) + 1):
+        for combo in combinations(flippable, size):
+            hops = [h.model_copy(update={"direction": _FLIP[h.direction]}) if i in combo else h
+                    for i, h in enumerate(decision.hops)]
+            variants.append((decision.model_copy(update={"hops": hops}),
+                             "reversed hop " + ", ".join(str(i + 1) for i in combo)))
+    return variants
 
 
 def _vector(question: str) -> list[Passage]:
@@ -114,6 +137,13 @@ def retrieve(question: str) -> RetrievalResult:
                 result.notes.append(f"{decision.query_type} needs entities that did not link; vector fallback")
             else:
                 result.graph_rows = templates.run(_driver(), *query)
+                if not result.graph_rows:
+                    for variant, how in reversed_variants(decision):
+                        retry = build_graph_query(variant, links)
+                        if retry and (rows := templates.run(_driver(), *retry)):
+                            result.graph_rows, result.direction_reversed = rows, True
+                            result.notes.append(f"no rows as read; found facts with {how}")
+                            break
                 if not result.graph_rows:
                     result.notes.append("graph returned no rows; vector fallback")
             if not result.graph_rows:

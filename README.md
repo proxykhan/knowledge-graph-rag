@@ -1,44 +1,55 @@
 # Knowledge Graph RAG for Enterprise Data
 
-**Hybrid knowledge graph + vector RAG over SEC 10-K filings: raised two-hop question accuracy from 8% to 92% and three-hop from 0% to 50% against a vector-only baseline, at 18 s p95 on a free-tier LLM.**
+**Hybrid knowledge graph + vector RAG over SEC 10-K filings. On 15 pre-registered questions answered from filing text, it raised accuracy from 47% to 73% against a vector-only baseline (two-hop 20% → 60%), at 13 s p95 on a free-tier LLM.**
 
 Corpus: the latest 10-Ks of NVIDIA, AMD, Intel, Micron and Applied Materials (404 chunks). **Stack:** Python · Neo4j · pgvector · LangChain (text splitting) · Gemini API (free tier; Claude switchable) · sentence-transformers · FastAPI
 
 ## Results
 
-50 questions (`eval/benchmark_questions.jsonl`), each with required answer items checked against the filing text. Both systems use the same LLM, answer generator and citation checks; only retrieval differs. Scoring is deterministic string matching (no LLM judge). Out-of-scope questions are correct only when refused.
+Both systems use the same LLM, answer generator and citation checks; only retrieval differs. Scoring is deterministic string matching (no LLM judge): an answer is correct when it mentions every required item, and out-of-scope questions are correct only when refused. Three question sets, from least to most independent of the system:
 
-| Question type | n | Vector RAG | Hybrid graph + vector |
+**1. Main benchmark (50 questions, written with the graph in view).**
+
+| Question type | n | Vector RAG | Hybrid, router v2 | Hybrid, router v3 |
+|---|---|---|---|---|
+| Single hop | 12 | 75% | 75% | 75% |
+| Two hop | 12 | 8% | 92% | 83% |
+| Three hop | 8 | 0% | 50% | **100%** |
+| Aggregation | 8 | 50% | 50% | 75% |
+| Out of scope (refused) | 10 | 100% | 100% | 100% |
+| **All** | 50 | 48% | 76% | **86%** |
+
+Router v3 was designed after reading v2's failures on this set, so the v3 column is optimistic. Use it to see what the fixes repaired, not as the headline.
+
+**2. Pre-registered questions (15, the headline).** Written by the developer's assistant from general industry knowledge and committed (`fc1ab74`) *before* any answer was looked up. Answer keys come from the filing **text**, never the graph; questions the filings cannot answer became out-of-scope questions, and each question's category follows the number of passages it actually needs.
+
+| Question type | n | Vector RAG | Hybrid (router v3) |
 |---|---|---|---|
-| Single hop | 12 | 75% | 75% |
-| Two hop | 12 | 8% | **92%** |
-| Three hop | 8 | 0% | **50%** |
-| Aggregation | 8 | 50% | 50% |
-| Out of scope (refused) | 10 | 100% | 100% |
-| **All** | 50 | 48% | **76%** |
+| Single hop | 2 | 50% | 50% |
+| Two hop | 5 | 20% | **60%** |
+| Three hop | 2 | 0% | **50%** |
+| Out of scope (refused) | 6 | 83% | **100%** |
+| **All** | 15 | 47% | **73%** |
 
-Parity on single-hop questions, and a widening gap as hops increase. Vector RAG mostly *refused* multi-hop questions rather than hallucinating: the facts sit in different filings (NVIDIA's 10-K names its competitors, AMD's and Intel's name their suppliers), so no top-5 passage set contains the whole chain, and the citation checks block guesses.
+The gap is real but smaller than on the main set, as expected for questions not chosen with the graph in view. Not blind: the assistant had seen the graph. A set written by someone who has not is the remaining step.
 
-| Cost and latency | Vector RAG | Hybrid |
+**3. Auto-generated from text (15).** Gemini 3.5 Flash wrote questions from random passage pairs that share a name (`make_blind.py`), with no graph access. It produced *combined* questions ("what was A's cash flow, **and** where did B get funding?") rather than chained ones, which is outside what the graph models. Both systems did poorly: vector 13%, hybrid 7%. Reported as a robustness check, not as a multi-hop result.
+
+| Cost and latency (main set, router v3) | Vector RAG | Hybrid |
 |---|---|---|
-| Latency p50 / p95 | 6.0 s / 12.0 s | 11.9 s / 18.1 s |
-| LLM tokens per query | 3,439 | 3,564 |
-| Cost per query (paid-tier equivalent) | $0.0022 | $0.0025 |
+| Latency p50 / p95 | 5.9 s / 8.4 s | 12.0 s / 13.3 s |
+| LLM tokens per query | 3,416 | 3,954 |
+| Cost per query (paid-tier equivalent) | $0.0022 | $0.0026 |
 | One-time ingestion | embeddings only (local, $0) | + graph extraction: 101 requests, 562k tokens, **$0.82** paid-tier equivalent |
 
-The graph is slower (two LLM calls per question: router + answer) and costs extra to build. On this corpus that buys +28 points overall and +84 points on two-hop questions.
+**Router v3** (`src/kgrag/retrieval/router.py`): a phrase guide for directions ("X's customers" = `SUPPLIES/out`), a rule that "the company that acquired X" is a chain, a shared-neighbours template for 2-3 entities ("which supplier serves all three"), and an automatic retry with reversed hop directions when a chain matches nothing (the answer step is told when this happened). Tuned only on development questions: hop directions 11/13 → 13/13 on `eval/routing_dev_questions.jsonl`, original routing set still 24/24.
 
-**Where the hybrid still fails** (every miss inspected; details in `eval/results/benchmark_runs.jsonl`):
+**Where the hybrid still fails** (every miss inspected; runs in `eval/results/benchmark_runs.jsonl`):
 
-- *Wrong hop direction (2):* for "Micron's customers" the router chose `SUPPLIES/in` instead of `out`; the chain matched nothing and fell back to vectors.
-- *Question shapes no template covers (2):* "which foundry supplies **all three**" needs a 3-way intersection (the template takes two entities); "suppliers that **also** supply competitors" is an intersection, not a chain.
-- *Routed to vectors, retrieval missed (4):* includes 2 multi-hop questions about Mentee Robotics' owner that the router misjudged as single facts.
-- *Single-hop retrieval misses (3, both systems):* the passage was not in the top 5; both systems refused rather than guess.
-- *Context cap (1):* a three-hop answer was correct but cut off at 25 graph facts.
-
-These results are from router v2 and are reported as-is: tuning the router on these 50 questions would fit the test set. One answer-key error was fixed after inspection (t12: the filing calls the company "Applied", not "Applied Materials"); the report re-scores both systems from their saved answers.
-
-**Caveat on question selection:** the questions were written with the graph available. Every link in a multi-hop answer key is stated verbatim in a filing, but only chains the extractor found could be chosen, so multi-hop questions about facts the extractor missed are absent. That favours the hybrid system; a question set written without seeing the graph would give a fairer (likely smaller) gap.
+- *Mixed-relation intersections:* "which of NVIDIA's suppliers does Micron name as **competitors**" crosses two relationship types; no template does that, and plain vector RAG answered it correctly while the hybrid refused.
+- *Retrieval misses on single facts (3 on the main set, 1 on the pre-registered set):* the passage was not in the top 5; both systems refused rather than guess.
+- *Incomplete lists:* "what does the company that acquired ZT Systems make" listed real AMD products but not the EPYC and Ryzen lines the key requires.
+- *Routing:* a question describing a person's career ("the former CFO of a company AMD acquired") went to vectors and was refused.
 
 ## Web interface
 
@@ -64,6 +75,7 @@ Ingestion writes two stores that share one key, `chunk_id`: every graph edge lis
 - [x] Phase 3: router + parameterized Cypher templates. 24/24 routing decisions correct on a small self-written set (see caveat below)
 - [x] Phase 4: merged context + validated citations, FastAPI endpoint
 - [x] Phase 5: benchmark vs. vector-only baseline (results at the top)
+- [x] Router v3 and independent checks: pre-registered question set, auto-generated text-only set
 
 ## Retrieval quality (Phase 2)
 
@@ -159,6 +171,7 @@ uvicorn kgrag.api:app --port 8000   # then open http://localhost:8000/docs
 - **Newest Gemini models were unusable on the free tier.** `gemini-3.8-flash` and `gemini-3.7-flash` returned 503 "high demand" (and one 504 after 60s) even for a one-word prompt; `gemini-3.5-flash` answered in ~1.5s, so the pipeline uses it.
 - **Prompt v1 copied the SEC's raw company title** ("APPLIED MATERIALS INC /DE") as the entity name and wrote long descriptive names ("export controls enacted by the United States government"). v2 passes clean legal names and asks for short standard names for non-company entities.
 - **Gemini 3.5 Flash's free tier allows only 20 requests/day.** Found from the 429 error body after 12 chunks. Switched to Gemini 3.5 Flash-Lite and 4 chunks per request (~101 requests for 404 chunks). On an 8-chunk comparison Flash-Lite matched Flash on company-to-company relationships but skipped the filer's own market/technology/regulation links in 3 of 8 chunks, so those relationship types are under-covered.
+- **Auto-generated "blind" questions measured the wrong thing.** Random passage pairs that share a name rarely contain a chain, so the generator joined unrelated facts with "and". Useful as a robustness check, but the independent multi-hop test needed questions written first and answered from text afterwards (set 2).
 - **The extractor recorded a stale fact.** Intel's 10-K calls Altera "our wholly owned subsidiary as of that date" in the sentence announcing the sale of 51% of it, so the graph says Altera is an Intel subsidiary. Verbatim evidence guarantees the quote exists, not that the fact is still true; Altera was excluded from benchmark answer keys.
 - **The router eval (24/24) overstated accuracy.** On the independent benchmark the router sent 2 of 20 multi-hop questions to vectors and chose a wrong hop direction on 2 more.
 - **Two-hop templates could not express three-hop questions.** Replaced `TWO_HOP` with a `CHAIN` template of 1-3 hops before running the benchmark.

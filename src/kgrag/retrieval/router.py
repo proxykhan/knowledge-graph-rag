@@ -13,7 +13,7 @@ from kgrag import llm
 from kgrag.ontology import RelationType
 from kgrag.retrieval.templates import MAX_HOPS, Direction, QueryType
 
-ROUTER_VERSION = "v2"
+ROUTER_VERSION = "v3"
 CONFIDENCE_THRESHOLD = 0.7  # below this, run both paths and merge
 
 
@@ -59,9 +59,24 @@ Relationship types: {", ".join(r.value for r in RelationType)}.
 SUPPLIES points from supplier to customer. COMPETES_WITH and PARTNERS_WITH have no direction (use any).
 A hop's direction is relative to the entity it starts from: out = that entity -> next, in = next -> that entity.
 
+Reading directions from phrases (X is the entity the hop starts from):
+- "X's suppliers", "who supplies X", "who makes chips for X", "X buys from"  -> SUPPLIES/in
+- "X's customers", "who buys from X", "companies X sells to", "X supplies"   -> SUPPLIES/out
+- "X's competitors", "X's rivals"                                          -> COMPETES_WITH/any
+- "X's parent", "the company that owns X"                                   -> SUBSIDIARY_OF/out
+- "X's subsidiaries", "businesses X owns"                                   -> SUBSIDIARY_OF/in
+- "companies X acquired", "what X bought"                                   -> ACQUIRED/out
+- "the company that acquired X", "X's acquirer"                             -> ACQUIRED/in
+- "X's executives", "who runs X"                                            -> EXECUTIVE_OF/in
+- "X's products", "what X makes"                                            -> PRODUCES/out
+- "who makes the chips/wafers for X's products" is still X's suppliers: one hop SUPPLIES/in, not a chain
+  through the product (products only become hops when the question asks about them).
+For a chain, read it inside out: "the suppliers of X's customers" starts at X, first SUPPLIES/out
+(X's customers), then SUPPLIES/in (their suppliers).
+
 Graph query types:
 - RELATIONS_OF: one entity, one hop. "Who supplies NVIDIA?"
-- SHARED_NEIGHBORS: two entities, what they have in common through one hop. "Which suppliers do NVIDIA and AMD share?"
+- SHARED_NEIGHBORS: two or three entities, what they all have in common through one hop. "Which suppliers do NVIDIA and AMD share?"
 - CHAIN: one entity, a chain of 2 or 3 hops, read outward from the entity. "Who supplies NVIDIA's competitors?"
 - PATH_BETWEEN: two entities, how they are connected. "How is Micron connected to AMD?"
 - COUNT: how many / who has the most, one hop. "Which company lists the most suppliers?"
@@ -75,6 +90,8 @@ Examples (question -> route, query_type, entities, hops as relation/direction):
 - "Which companies supply NVIDIA's competitors?" -> GRAPH, CHAIN, [NVIDIA], [COMPETES_WITH/any, SUPPLIES/in]
 - "What regulations apply to TSMC's customers?" -> GRAPH, CHAIN, [TSMC], [SUPPLIES/out, SUBJECT_TO/out]
 - "Who supplies the competitors of SK hynix's customers?" -> GRAPH, CHAIN, [SK hynix], [SUPPLIES/out, COMPETES_WITH/any, SUPPLIES/in]
+- "Which markets do Micron, Intel and AMD all serve?" -> GRAPH, SHARED_NEIGHBORS, [Micron, Intel, AMD], [SERVES_MARKET/out]
+- "Which regulations apply to the parent company of IMS Nanofabrication?" -> GRAPH, CHAIN, [IMS Nanofabrication], [SUBSIDIARY_OF/out, SUBJECT_TO/out]
 - "How is Samsung related to Intel?" -> GRAPH, PATH_BETWEEN, [Samsung, Intel], [ANY/any]
 - "Which company names the most competitors?" -> GRAPH, COUNT, [], [COMPETES_WITH/any]
 - "How many suppliers does AMD list?" -> GRAPH, COUNT, [AMD], [SUPPLIES/in]
@@ -84,6 +101,9 @@ Examples (question -> route, query_type, entities, hops as relation/direction):
 - "When did AMD complete the ZT Systems acquisition?" -> VECTOR, NONE, [AMD, ZT Systems], []
 
 Questions about a single date, amount or explanation go to VECTOR even if they name entities.
+But a question that identifies an entity through its relationships ("the company that acquired X",
+"the owner of the business that ...") and asks about that entity's connections is GRAPH CHAIN, starting
+from the entity that is named.
 Questions outside these companies' filings: VECTOR with low confidence."""
 
 

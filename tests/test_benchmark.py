@@ -28,6 +28,16 @@ def test_short_and_numeric_aliases_match_whole_words_only():
 def test_benchmark_file_is_well_formed():
     rows = [json.loads(l) for l in (PROJECT_ROOT / "eval" / "benchmark_questions.jsonl").open(encoding="utf-8")]
     assert len(rows) >= 50 and len({r["id"] for r in rows}) == len(rows)
-    assert {r["category"] for r in rows} == set(CATEGORIES)
+    assert {r["category"] for r in rows} == {"single_hop", "two_hop", "three_hop", "aggregation", "out_of_scope"}
     for r in rows:
         assert (r["category"] == "out_of_scope") == (r["required"] == [])
+
+
+def test_blind_file_uses_known_categories_and_has_answer_keys():
+    rows = [json.loads(l) for l in (PROJECT_ROOT / "eval" / "blind_questions.jsonl").open(encoding="utf-8")]
+    assert rows and {r["category"] for r in rows} <= set(CATEGORIES)
+    assert all(r["required"] and all(item for item in r["required"]) for r in rows)
+
+
+def test_trademark_symbols_do_not_break_matching():
+    assert mentions("charges on AMD Instinct MI308 GPUs", "AMD Instinct™ MI308")

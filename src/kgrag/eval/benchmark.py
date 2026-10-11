@@ -1,7 +1,8 @@
 """Phase 5: benchmark hybrid graph+vector RAG against plain vector RAG, by question type.
 
 Usage:
-    python -m kgrag.eval.benchmark            # run (resumes; already-answered questions are skipped)
+    python -m kgrag.eval.benchmark            # run the main set (resumes; already-answered questions are skipped)
+    python -m kgrag.eval.benchmark --set blind # run the blind set
     python -m kgrag.eval.benchmark --report   # only rebuild the report from saved runs
 
 Both systems use the same answer generator and the same citation checks; only retrieval
@@ -25,15 +26,19 @@ from kgrag.config import PROJECT_ROOT
 from kgrag.extract.prompt import PROMPT_VERSION
 from kgrag.retrieval.router import ROUTER_VERSION
 
-QUESTIONS = PROJECT_ROOT / "eval" / "benchmark_questions.jsonl"
+QUESTION_SETS = {"main": "benchmark_questions.jsonl",   # written with the graph in view (see README)
+                 "blind": "blind_questions.jsonl",      # generated from filing text only (make_blind.py)
+                 "assistant": "assistant_questions.jsonl"}  # pre-registered, answers looked up in text
 RUNS = PROJECT_ROOT / "eval" / "results" / "benchmark_runs.jsonl"
-REPORT = PROJECT_ROOT / "eval" / "results" / "benchmark.md"
+RESULTS_DIR = PROJECT_ROOT / "eval" / "results"
 SYSTEMS = ("vector", "hybrid")
-CATEGORIES = ("single_hop", "two_hop", "three_hop", "aggregation", "out_of_scope")
+CATEGORIES = ("single_hop", "two_hop", "three_hop", "aggregation", "out_of_scope",
+              "two_facts", "three_facts")  # blind set: facts combined, not chained
 RUN_VERSION = f"router-{ROUTER_VERSION}/extract-{PROMPT_VERSION}"
 
 
 def _norm(text: str) -> str:
+    text = re.sub("[™®©]", "", text)  # ™ ® ©: NFKC would turn ™ into "TM"
     text = unicodedata.normalize("NFKC", text).replace("’", "'").lower()
     return re.sub(r"\s+", " ", text)
 
@@ -94,9 +99,9 @@ def _p(values: list[float], pct: float) -> float:
     return values[min(len(values) - 1, round(pct / 100 * (len(values) - 1)))]
 
 
-def report(questions: list[dict]) -> str:
-    runs = load_runs()
+def report(questions: list[dict], set_name: str = "main") -> str:
     qs = {q["id"]: q for q in questions}
+    runs = {k: r for k, r in load_runs().items() if k[1] in qs}  # only this question set
     by = defaultdict(list)
     for (system, qid), r in runs.items():
         # Re-score from the saved answer so a corrected answer key applies to every system alike.
@@ -105,7 +110,7 @@ def report(questions: list[dict]) -> str:
         by[(system, "all")].append(r)
     model = llm.model_name()
 
-    lines = [f"# Benchmark: hybrid graph+vector RAG vs. vector-only RAG", "",
+    lines = [f"# Benchmark ({set_name} set): hybrid graph+vector RAG vs. vector-only RAG", "",
              f"{len(questions)} questions, model `{model}`, run version `{RUN_VERSION}`. "
              "Accuracy = all required items mentioned (refusal for out-of-scope). "
              "Item recall = share of required items mentioned (answerable questions only).", "",
@@ -152,12 +157,14 @@ def report(questions: list[dict]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--report", action="store_true", help="rebuild the report without running")
+    parser.add_argument("--set", choices=QUESTION_SETS, default="main")
     args = parser.parse_args()
-    questions = [json.loads(line) for line in QUESTIONS.open(encoding="utf-8")]
+    path = PROJECT_ROOT / "eval" / QUESTION_SETS[args.set]
+    questions = [json.loads(line) for line in path.open(encoding="utf-8")]
     if not args.report:
         run(questions)
-    text = report(questions)
-    REPORT.write_text(text, encoding="utf-8")
+    text = report(questions, args.set)
+    (RESULTS_DIR / ("benchmark.md" if args.set == "main" else f"benchmark_{args.set}.md")).write_text(text, encoding="utf-8")
     print("\n" + text)
 
 

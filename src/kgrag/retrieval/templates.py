@@ -61,17 +61,20 @@ def relations_of(entity_id: str, rel: RelationType | None, direction: Direction)
     return query, {"id": entity_id, "rel": _rel_param(rel)}
 
 
-def shared_neighbors(a: str, b: str, rel: RelationType | None, direction: Direction) -> tuple[str, dict]:
+def shared_neighbors(ids: list[str], rel: RelationType | None, direction: Direction) -> tuple[str, dict]:
+    """What 2 or 3 entities have in common through one hop: "which supplier serves all three"."""
+    if not 2 <= len(ids) <= 3:
+        raise ValueError(f"shared_neighbors needs 2-3 entities, got {len(ids)}")
+    patterns = [f"p{i} = (a{i}:Entity {{id: $a{i}}}){_arrow(direction, f'r{i}')}(n{'' if i else ':Entity'})"
+                for i in range(len(ids))]
+    filters = [_REL_FILTER.format(r=f"r{i}") for i in range(len(ids))] + [f"n <> a{i}" for i in range(len(ids))]
+    edges = " + ".join(_EDGES.replace("relationships(p)", f"relationships(p{i})") for i in range(len(ids)))
     query = f"""
-        MATCH p1 = (a:Entity {{id: $a}}){_arrow(direction, 'r1')}(n:Entity),
-              p2 = (b:Entity {{id: $b}}){_arrow(direction, 'r2')}(n)
-        WHERE {_REL_FILTER.format(r='r1')} AND {_REL_FILTER.format(r='r2')} AND n <> a AND n <> b
-        WITH n, p1, p2
-        RETURN n.name AS shared,
-               {_EDGES.replace('relationships(p)', 'relationships(p1)')} +
-               {_EDGES.replace('relationships(p)', 'relationships(p2)')} AS edges
+        MATCH {", ".join(patterns)}
+        WHERE {" AND ".join(filters)}
+        RETURN n.name AS shared, {edges} AS edges
         LIMIT {LIMIT}"""
-    return query, {"a": a, "b": b, "rel": _rel_param(rel)}
+    return query, {f"a{i}": eid for i, eid in enumerate(ids)} | {"rel": _rel_param(rel)}
 
 
 MAX_HOPS = 3

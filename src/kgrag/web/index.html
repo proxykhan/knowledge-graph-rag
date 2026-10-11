@@ -303,15 +303,15 @@
 <!-- ================= RESULTS ================= -->
 <section role="tabpanel" id="tab-results" aria-labelledby="t-results" hidden>
   <div class="kpis">
-    <div class="kpi"><b>8% → 92%</b><span>questions linking 2 facts</span></div>
-    <div class="kpi"><b>0% → 50%</b><span>questions linking 3 facts</span></div>
-    <div class="kpi"><b>48% → 76%</b><span>all 50 test questions</span></div>
+    <div class="kpi"><b>47% → 73%</b><span>15 new questions, answers checked in the reports</span></div>
+    <div class="kpi"><b>20% → 60%</b><span>new questions linking 2 facts</span></div>
+    <div class="kpi"><b>48% → 86%</b><span>original 50 test questions</span></div>
     <div class="kpi"><b>$0.82</b><span>AI cost to build the map</span></div>
   </div>
   <div class="grid2">
     <div class="card">
       <h2>Correct answers by question type</h2>
-      <p class="muted small" style="margin-top:-6px">50 test questions. Both systems use the same AI and the same citation checks; only how they look things up differs.</p>
+      <p class="muted small" style="margin-top:-6px">15 new questions, written before their answers were looked up in the reports. Both systems use the same AI and the same checks; only how they look things up differs.</p>
       <div class="legend" style="margin-bottom:12px"><span style="--c:#9AA7B8">Ordinary AI search</span><span style="--c:var(--accent)">This system</span></div>
       <div class="bars" id="bars"></div>
     </div>
@@ -320,18 +320,18 @@
       <table class="plain">
         <tr><th></th><th>Ordinary search</th><th>This system</th></tr>
         <tr><td>Typical wait</td><td>6 s</td><td>12 s</td></tr>
-        <tr><td>Slowest 5% of questions</td><td>12 s</td><td>18 s</td></tr>
-        <tr><td>Cost per question*</td><td>$0.0022</td><td>$0.0025</td></tr>
+        <tr><td>Slowest 5% of questions</td><td>8 s</td><td>13 s</td></tr>
+        <tr><td>Cost per question*</td><td>$0.0022</td><td>$0.0026</td></tr>
         <tr><td>One-time setup</td><td>free</td><td>$0.82 to build the map</td></tr>
       </table>
       <p class="muted small">*At paid prices; the project ran on a free tier.</p>
       <h3 style="margin-top:16px">Where it still goes wrong</h3>
       <ul class="small" style="padding-left:18px;margin:0">
-        <li>Sometimes it reads a chain backwards (customers vs. suppliers), finds nothing, and falls back to text search.</li>
-        <li>Questions like "which supplier serves <i>all three</i>" need a kind of lookup it doesn't have yet.</li>
+        <li>Questions mixing two kinds of link ("which of NVIDIA's <i>suppliers</i> does Micron call <i>competitors</i>?") need a lookup it doesn't have yet; ordinary search got that one right.</li>
         <li>When search misses the right passage, it refuses rather than guess.</li>
+        <li>Long lists can come back incomplete.</li>
       </ul>
-      <div class="note"><b>Honest caveat:</b> the test questions were written by the developer with the map available, which favours this system. A blind test would likely show a smaller gap.</div>
+      <div class="note"><b>Honest caveat:</b> the original 50 questions were written with the map in view, and the latest fixes were designed after studying their failures, so 86% is optimistic. The 15 new questions are the fairer test, but they were still written by someone who had seen the map. Questions from a person who hasn't would be the final check.</div>
     </div>
   </div>
 </section>
@@ -826,12 +826,12 @@ function drawHowGraph() {
 
 /* ---------- results bars ---------- */
 const RESULTS = [
-  ["A single fact", "e.g. \"What did Mobileye pay for Mentee Robotics?\"", 75, 75],
-  ["Linking 2 facts", "e.g. \"Which suppliers do NVIDIA and AMD share?\"", 8, 92],
-  ["Linking 3 facts", "e.g. \"Who supplies the competitors of Micron's customers?\"", 0, 50],
-  ["Lists and totals", "e.g. \"Which contract manufacturers does NVIDIA use?\"", 50, 50],
-  ["Not in the reports (refused)", "e.g. \"Who is the CEO of Tesla?\"", 100, 100],
-  ["All 50 questions", "", 48, 76]
+  ["A single fact", "e.g. \"Which companies does Micron name as competitors?\"", 50, 50],
+  ["Linking 2 facts", "e.g. \"What products does the company that owns Mobileye make?\"", 20, 60],
+  ["Linking 3 facts", "e.g. \"Who supplies the competitors of the company that acquired ZT Systems?\"", 0, 50],
+  ["Not in the reports (refused)", "e.g. \"Who are Applied Materials' largest customers?\"", 83, 100],
+  ["All 15 new questions", "", 47, 73],
+  ["Original 50 questions (optimistic)", "", 48, 86]
 ];
 $("bars").innerHTML = RESULTS.map(([label, ex, v, h]) => `<div class="bar-row">
   <div class="label"><span><b>${esc(label)}</b> <span class="muted small">${esc(ex)}</span></span></div>
