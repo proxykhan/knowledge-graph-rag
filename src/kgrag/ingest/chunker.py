@@ -49,7 +49,7 @@ def chunk_document(html: bytes, meta: dict) -> list[Chunk]:
     text = html_to_text(html)
     doc_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
     chunks = []
-    markers = SECTION_MARKERS.get(meta["ticker"])
+    markers = SECTION_MARKERS.get(meta["doc_id"]) or SECTION_MARKERS.get(meta["ticker"])
     sections = (split_sections_by_markers(text, markers, SECTIONS) if markers
                 else split_sections(text, SECTIONS))
     if not sections:

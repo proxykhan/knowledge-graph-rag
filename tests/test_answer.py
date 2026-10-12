@@ -58,7 +58,7 @@ def test_api_ask_shape(monkeypatch):
     from kgrag import api
     from kgrag.answer.generate import Answer
 
-    monkeypatch.setattr(api, "answer", lambda q: Answer(q, True, "TSMC supplies NVIDIA. [S1]", [
+    monkeypatch.setattr(api, "answer", lambda q, **kw: Answer(q, True, "TSMC supplies NVIDIA. [S1]", [
         {"text": "TSMC supplies NVIDIA.", "citations": [
             {"source_id": "S1", "kind": "graph", "chunk_ids": ["N:1:0011"], "quote": "We utilize foundries"}]}],
         "GRAPH", 1))
@@ -77,3 +77,27 @@ def test_web_interface_is_served():
 
     r = TestClient(api.app).get("/")
     assert r.status_code == 200 and "Filing Explorer" in r.text
+
+
+def test_answer_cache_returns_stored_answer(monkeypatch, tmp_path):
+    from kgrag.answer import generate
+
+    calls = []
+    monkeypatch.setattr(generate, "ANSWER_CACHE", tmp_path)
+    monkeypatch.setattr(generate, "_answer", lambda q, mode="hybrid": calls.append(q) or generate.Answer(
+        q, True, "TSMC supplies NVIDIA. [S1]", [], "GRAPH", 1, latency_ms=9000))
+    first = generate.answer("Who supplies NVIDIA?", use_cache=True)
+    second = generate.answer("  who supplies   NVIDIA? ", use_cache=True)   # same question, other spacing/case
+    assert calls == ["Who supplies NVIDIA?"] and not first.cached and second.cached
+    assert second.answer == first.answer and second.latency_ms < 9000
+    generate.answer("Who supplies NVIDIA?")                                # benchmarks bypass the cache
+    assert len(calls) == 2
+
+
+def test_rate_limiter_blocks_after_the_limit_and_zero_disables():
+    from kgrag.api import RateLimiter
+
+    limited = RateLimiter(per_minute=2, per_day=0)
+    assert [limited.allow("1.2.3.4") for _ in range(3)] == [True, True, False]
+    assert limited.allow("5.6.7.8")                      # other visitors unaffected
+    assert all(RateLimiter(0, 0).allow("x") for _ in range(50))

@@ -25,6 +25,7 @@ class QueryType(StrEnum):
     PATH_BETWEEN = "PATH_BETWEEN"            # how are X and Y connected
     COUNT = "COUNT"                          # how many suppliers does X have / who has the most
     ENTITY_PROFILE = "ENTITY_PROFILE"        # everything the graph knows about X
+    OVERVIEW = "OVERVIEW"                    # corpus-level: the main groups of companies
     NONE = "NONE"                            # not a graph question
 
 
@@ -39,7 +40,8 @@ _ARROWS = {Direction.OUT: ("-[{r}]->"), Direction.IN: ("<-[{r}]-"), Direction.AN
 # Shared projection: a path's relationships as citable edges.
 _EDGES = """[r IN relationships(p) | {source: startNode(r).name, source_type: startNode(r).type,
              relation: type(r), target: endNode(r).name, target_type: endNode(r).type,
-             chunk_ids: r.chunk_ids, evidence: r.evidence, confidence: r.confidence}]"""
+             chunk_ids: r.chunk_ids, evidence: r.evidence, confidence: r.confidence,
+             status: coalesce(r.status, 'current'), years: coalesce(r.years, [])}]"""
 _REL_FILTER = "($rel IS NULL OR type({r}) = $rel)"
 LIMIT = 50
 
@@ -61,20 +63,30 @@ def relations_of(entity_id: str, rel: RelationType | None, direction: Direction)
     return query, {"id": entity_id, "rel": _rel_param(rel)}
 
 
-def shared_neighbors(ids: list[str], rel: RelationType | None, direction: Direction) -> tuple[str, dict]:
-    """What 2 or 3 entities have in common through one hop: "which supplier serves all three"."""
+def shared_neighbors(ids: list[str], hops: list[tuple[RelationType | None, Direction]]) -> tuple[str, dict]:
+    """What 2 or 3 entities have in common through one hop each.
+
+    One hop applies to every entity ("which supplier serves all three"); or one hop per entity
+    when they reach the shared thing differently ("which of NVIDIA's suppliers does Micron name
+    as competitors": NVIDIA <-SUPPLIES- x, Micron -COMPETES_WITH- x).
+    """
     if not 2 <= len(ids) <= 3:
         raise ValueError(f"shared_neighbors needs 2-3 entities, got {len(ids)}")
-    patterns = [f"p{i} = (a{i}:Entity {{id: $a{i}}}){_arrow(direction, f'r{i}')}(n{'' if i else ':Entity'})"
+    if len(hops) not in (1, len(ids)):
+        raise ValueError(f"shared_neighbors needs 1 hop or one per entity, got {len(hops)}")
+    per = hops if len(hops) == len(ids) else hops * len(ids)
+    patterns = [f"p{i} = (a{i}:Entity {{id: $a{i}}}){_arrow(per[i][1], f'r{i}')}(n{'' if i else ':Entity'})"
                 for i in range(len(ids))]
-    filters = [_REL_FILTER.format(r=f"r{i}") for i in range(len(ids))] + [f"n <> a{i}" for i in range(len(ids))]
+    filters = ([f"($rel{i} IS NULL OR type(r{i}) = $rel{i})" for i in range(len(ids))]
+               + [f"n <> a{i}" for i in range(len(ids))])
     edges = " + ".join(_EDGES.replace("relationships(p)", f"relationships(p{i})") for i in range(len(ids)))
     query = f"""
         MATCH {", ".join(patterns)}
         WHERE {" AND ".join(filters)}
         RETURN n.name AS shared, {edges} AS edges
         LIMIT {LIMIT}"""
-    return query, {f"a{i}": eid for i, eid in enumerate(ids)} | {"rel": _rel_param(rel)}
+    return query, ({f"a{i}": eid for i, eid in enumerate(ids)}
+                   | {f"rel{i}": _rel_param(per[i][0]) for i in range(len(ids))})
 
 
 MAX_HOPS = 3

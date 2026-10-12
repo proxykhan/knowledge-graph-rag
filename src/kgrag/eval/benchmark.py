@@ -34,7 +34,8 @@ RESULTS_DIR = PROJECT_ROOT / "eval" / "results"
 SYSTEMS = ("vector", "hybrid")
 CATEGORIES = ("single_hop", "two_hop", "three_hop", "aggregation", "out_of_scope",
               "two_facts", "three_facts")  # blind set: facts combined, not chained
-RUN_VERSION = f"router-{ROUTER_VERSION}/extract-{PROMPT_VERSION}"
+# Everything that changes an answer: router, extraction prompt (the graph) and the answering model.
+RUN_VERSION = f"router-{ROUTER_VERSION}/extract-{PROMPT_VERSION}/answer-{llm.model_name()}"
 
 
 def _norm(text: str) -> str:

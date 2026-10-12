@@ -23,6 +23,9 @@ UNDIRECTED = {"COMPETES_WITH", "PARTNERS_WITH"}
 
 
 def hops_match(expected: list[str], got: list[dict]) -> bool:
+    # One shared hop repeated per entity ([COMPETES/any, COMPETES/any]) means the same as one hop.
+    if len(expected) == 1 and len(got) > 1 and all(h == got[0] for h in got):
+        got = got[:1]
     if len(expected) != len(got):
         return False
     for want, h in zip(expected, got):

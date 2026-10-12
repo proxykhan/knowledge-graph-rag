@@ -20,15 +20,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from kgrag import llm
-from kgrag.config import CACHE_DIR, PROCESSED_DIR
+from kgrag.config import CACHE_DIR, PROCESSED_DIR, settings
 from kgrag.extract.prompt import PROMPT_VERSION, SYSTEM_PROMPT, user_message
 from kgrag.extract.schema import BatchExtraction, ChunkExtraction, ExtractedEntity
 from kgrag.ingest.companies import COMPANY_NAMES
-from kgrag.ontology import SYMMETRIC_RELATIONS, is_allowed
+from kgrag.ontology import SYMMETRIC_RELATIONS, RelationType, is_allowed
 
 BATCH_SIZE = 4
 MAX_ATTEMPTS = 3
-CONCURRENCY = 2  # requests are paced by llm.py; this only overlaps network waits
+CONCURRENCY = 2  # default parallel requests; llm.py still paces how fast they start
 
 
 @dataclass
@@ -72,6 +72,10 @@ def validate(extraction: ChunkExtraction, chunk_id: str, chunk_text: str) -> Chu
         elif not 0.0 <= r.confidence <= 1.0:
             reason = "confidence outside 0-1"
         else:
+            # A completed acquisition never stops being true; the model tends to call it "past"
+            # because filings describe it in the past tense.
+            if r.relation == RelationType.ACQUIRED and rel.get("status") == "past":
+                rel["status"] = "current"
             if r.relation in SYMMETRIC_RELATIONS and rel["source"] > rel["target"]:
                 rel["source"], rel["target"] = rel["target"], rel["source"]
                 rel["source_type"], rel["target_type"] = rel["target_type"], rel["source_type"]
@@ -120,7 +124,7 @@ def split_batch(batch: BatchExtraction, chunks: list[dict]) -> list[ChunkExtract
 
 def _cache_path(chunk: dict):
     safe_id = chunk["chunk_id"].replace(":", "_")
-    return (CACHE_DIR / "extraction" / llm.model_name() / PROMPT_VERSION
+    return (CACHE_DIR / "extraction" / llm.model_name(settings.extraction_provider) / PROMPT_VERSION
             / chunk["doc_hash"][:16] / f"{safe_id}.json")
 
 
@@ -132,7 +136,8 @@ def extract_batch(chunks: list[dict]) -> tuple[list[ChunkResult], llm.Usage]:
     message = user_message(company, chunks)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            parsed, call_usage = llm.generate_structured(SYSTEM_PROMPT, message, BatchExtraction)
+            parsed, call_usage = llm.generate_structured(SYSTEM_PROMPT, message, BatchExtraction,
+                                                         provider=settings.extraction_provider)
         except llm.LLMError as e:
             last_error = str(e)
             continue
@@ -171,9 +176,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None, help="only the first N chunks (pilot run)")
     parser.add_argument("--contains", default=None, help="only chunks whose text contains this string")
+    parser.add_argument("--workers", type=int, default=CONCURRENCY,
+                        help="parallel requests; each takes ~1 min with thinking, so more workers = faster")
     args = parser.parse_args()
 
-    model = llm.model_name()
+    model = llm.model_name(settings.extraction_provider)
     chunks = load_chunks()
     if args.contains:
         chunks = [c for c in chunks if args.contains.lower() in c["text"].lower()]
@@ -186,7 +193,7 @@ def main() -> None:
     total = llm.Usage()
     done = failed = 0
     quota_hit = None
-    with ThreadPoolExecutor(CONCURRENCY) as pool:
+    with ThreadPoolExecutor(args.workers) as pool:
         futures = {pool.submit(extract_batch, b): b for b in batches}
         for fut in as_completed(futures):
             if fut.cancelled():  # dropped after the daily quota was hit

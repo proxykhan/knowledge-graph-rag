@@ -10,21 +10,24 @@ Endpoints:
     GET  /chunks/{chunk_id}   the source text a citation points to
     GET  /graph/entity        ?name=NVIDIA -> that entity's connections in the graph
     GET  /entities            entity names for search suggestions
+    GET  /communities         groups of closely connected companies
     GET  /health              Neo4j and Postgres reachability
 """
 
+import json
+import threading
+import time
+from collections import defaultdict, deque
 from dataclasses import asdict
 
-import json
-
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from kgrag import llm
 from kgrag.answer.generate import answer
-from kgrag.config import PROCESSED_DIR, PROJECT_ROOT
+from kgrag.config import PROCESSED_DIR, PROJECT_ROOT, settings
 from kgrag.retrieval import templates
 from kgrag.retrieval.entity_linker import default_linker
 from kgrag.retrieval.retriever import _driver
@@ -53,6 +56,8 @@ class EdgeOut(BaseModel):
     relation: str
     target: str
     target_type: str | None = None
+    status: str = "current"   # current | past (ended) | planned, as of the latest report mentioning it
+    years: list[int] = []     # fiscal years whose reports mention it
 
 
 class SourceOut(BaseModel):
@@ -85,6 +90,7 @@ class AskResponse(BaseModel):
     tokens_out: int
     mode: str
     sources: list[SourceOut]
+    cached: bool = False      # served from the answer cache
 
 
 class ChunkOut(BaseModel):
@@ -101,10 +107,37 @@ def web_interface() -> FileResponse:
     return FileResponse(WEB_DIR / "index.html")
 
 
+class RateLimiter:
+    """Per-client sliding windows, so a public deployment cannot drain the LLM quota.
+    Limits of 0 disable a window (the default for local use)."""
+
+    def __init__(self, per_minute: int, per_day: int):
+        self.limits = [(60, per_minute), (86_400, per_day)]
+        self.hits: dict[str, deque] = defaultdict(deque)
+        self.lock = threading.Lock()
+
+    def allow(self, client: str) -> bool:
+        now = time.monotonic()
+        with self.lock:
+            q = self.hits[client]
+            while q and now - q[0] > 86_400:
+                q.popleft()
+            for window, limit in self.limits:
+                if limit and sum(1 for t in q if now - t <= window) >= limit:
+                    return False
+            q.append(now)
+            return True
+
+
+limiter = RateLimiter(settings.ask_limit_per_minute, settings.ask_limit_per_day)
+
+
 @app.post("/ask", response_model=AskResponse)
-def ask(req: AskRequest) -> AskResponse:
+def ask(req: AskRequest, request: Request) -> AskResponse:
+    if not limiter.allow(request.client.host if request.client else "unknown"):
+        raise HTTPException(status_code=429, detail="Too many questions; please wait a minute and try again.")
     try:
-        return AskResponse(**asdict(answer(req.question.strip())))
+        return AskResponse(**asdict(answer(req.question.strip(), use_cache=True)))
     except llm.QuotaExhausted as e:
         raise HTTPException(status_code=503, detail=f"LLM quota exhausted, try again later: {e}")
 
@@ -138,6 +171,13 @@ def entity_graph(name: str = Query(min_length=2, max_length=200)) -> EntityGraph
     rows = templates.run(_driver(), *templates.entity_profile(link.entity_id, limit=300))
     edges = [e for row in rows for e in row["edges"]]
     return EntityGraphOut(entity={"id": link.entity_id, "name": link.name, "type": link.type}, edges=edges)
+
+
+@app.get("/communities")
+def communities() -> list[dict]:
+    """Groups of closely connected companies (kgrag.graph.communities), with their facts."""
+    path = PROCESSED_DIR / "communities.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 
 
 @app.get("/entities")

@@ -13,7 +13,7 @@ from kgrag import llm
 from kgrag.ontology import RelationType
 from kgrag.retrieval.templates import MAX_HOPS, Direction, QueryType
 
-ROUTER_VERSION = "v3"
+ROUTER_VERSION = "v4"
 CONFIDENCE_THRESHOLD = 0.7  # below this, run both paths and merge
 
 
@@ -76,11 +76,15 @@ For a chain, read it inside out: "the suppliers of X's customers" starts at X, f
 
 Graph query types:
 - RELATIONS_OF: one entity, one hop. "Who supplies NVIDIA?"
-- SHARED_NEIGHBORS: two or three entities, what they all have in common through one hop. "Which suppliers do NVIDIA and AMD share?"
+- SHARED_NEIGHBORS: two or three entities, what they all have in common. "Which suppliers do NVIDIA and AMD share?"
+  Give one hop when every entity reaches the shared thing the same way, or one hop PER ENTITY, in the
+  same order as the entities, when they reach it differently ("X's suppliers that Y calls competitors").
 - CHAIN: one entity, a chain of 2 or 3 hops, read outward from the entity. "Who supplies NVIDIA's competitors?"
 - PATH_BETWEEN: two entities, how they are connected. "How is Micron connected to AMD?"
 - COUNT: how many / who has the most, one hop. "Which company lists the most suppliers?"
 - ENTITY_PROFILE: everything about one entity, no specific relationship.
+- OVERVIEW: about the whole set of companies, no single entity: "What are the main groups of companies in
+  these filings?", "Which clusters of competitors exist?" No entities, no hops.
 
 Examples (question -> route, query_type, entities, hops as relation/direction):
 - "Who manufactures chips for AMD?" -> GRAPH, RELATIONS_OF, [AMD], [SUPPLIES/in]
@@ -92,6 +96,9 @@ Examples (question -> route, query_type, entities, hops as relation/direction):
 - "Who supplies the competitors of SK hynix's customers?" -> GRAPH, CHAIN, [SK hynix], [SUPPLIES/out, COMPETES_WITH/any, SUPPLIES/in]
 - "Which markets do Micron, Intel and AMD all serve?" -> GRAPH, SHARED_NEIGHBORS, [Micron, Intel, AMD], [SERVES_MARKET/out]
 - "Which regulations apply to the parent company of IMS Nanofabrication?" -> GRAPH, CHAIN, [IMS Nanofabrication], [SUBSIDIARY_OF/out, SUBJECT_TO/out]
+- "Which of Qualcomm's competitors are also Broadcom's partners?" -> GRAPH, SHARED_NEIGHBORS, [Qualcomm, Broadcom], [COMPETES_WITH/any, PARTNERS_WITH/any]
+- "Which of Lam Research's customers does KLA also supply?" -> GRAPH, SHARED_NEIGHBORS, [Lam Research, KLA], [SUPPLIES/out, SUPPLIES/out]
+- "How did Qorvo's list of customers change between its annual reports?" -> GRAPH, RELATIONS_OF, [Qorvo], [SUPPLIES/out]
 - "How is Samsung related to Intel?" -> GRAPH, PATH_BETWEEN, [Samsung, Intel], [ANY/any]
 - "Which company names the most competitors?" -> GRAPH, COUNT, [], [COMPETES_WITH/any]
 - "How many suppliers does AMD list?" -> GRAPH, COUNT, [AMD], [SUPPLIES/in]
@@ -104,6 +111,8 @@ Questions about a single date, amount or explanation go to VECTOR even if they n
 But a question that identifies an entity through its relationships ("the company that acquired X",
 "the owner of the business that ...") and asks about that entity's connections is GRAPH CHAIN, starting
 from the entity that is named.
+Questions about how relationships changed over time ("new", "no longer", "between its reports", "former")
+are GRAPH: graph facts record which years' reports mention them and whether they ended.
 Questions outside these companies' filings: VECTOR with low confidence."""
 
 

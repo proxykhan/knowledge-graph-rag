@@ -33,8 +33,15 @@ DEV_TICKERS = ["NVDA", "AMD", "INTC", "AMAT", "MU"]
 
 # Filers whose 10-K body has no "Item X." headings. Intel uses its own layout plus a
 # page-number cross-reference index, so sections are located by start/end line markers.
-# Markers are tied to one filing year; re-check them when a new 10-K is downloaded.
+# Markers are tied to one filing year: keys are a doc_id (one filing) or a ticker (fallback).
+# Re-check them when a new 10-K is downloaded.
 SECTION_MARKERS: dict[str, dict[str, tuple[str, str]]] = {
+    # Intel 2024 orders its report MD&A, then Risk Factors, then the rest of Business.
+    "INTC-10K-2024-12-28": {
+        "1": (r"^Our Priorities$", r"^Overview$"),
+        "1A": (r"^Risk Factors$", r"^Sales and Marketing$"),
+        "7": (r"^A Year in Review$", r"^Risk Factors$"),
+    },
     "INTC": {
         "1": (r"^Our Priorities$", r"^Significant Events and Trends Impacting Results$"),
         "1A": (r"^The following summarizes what we believe to be the material factors",

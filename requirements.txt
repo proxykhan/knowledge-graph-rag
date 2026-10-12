@@ -26,3 +26,6 @@ uvicorn>=0.30
 # Dev
 pytest>=8.0
 httpx>=0.27  # FastAPI TestClient
+
+# Company groups (community detection)
+networkx>=3.2

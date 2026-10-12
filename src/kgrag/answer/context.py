@@ -59,9 +59,21 @@ class Context:
         return "\n\n".join(parts) if parts else "(no context retrieved)"
 
 
+_STATUS_NOTE = {
+    "past": " (ended; no longer true as of the latest report that mentions it)",
+    "planned": " (planned or announced; not yet in effect as of the latest report that mentions it)",
+}
+
+
 def statement(edge: dict) -> str:
+    """'TSMC supplies NVIDIA Corporation [reported in FY2025, FY2026].' plus a note when the
+    fact has ended or is only planned, so time questions can be answered from the graph."""
     template = _SENTENCES.get(edge["relation"], "{s} " + edge["relation"].lower().replace("_", " ") + " {t}.")
-    return template.format(s=edge["source"], t=edge["target"])
+    text = template.format(s=edge["source"], t=edge["target"])
+    note = _STATUS_NOTE.get(edge.get("status") or "current", "")
+    years = edge.get("years") or []
+    when = f" [reported in {', '.join(f'FY{y}' for y in years)}]" if years else ""
+    return text[:-1] + note + "." + when
 
 
 def build_context(result: RetrievalResult) -> Context:
@@ -75,7 +87,7 @@ def build_context(result: RetrievalResult) -> Context:
             edge_ids[key] = sid
             sources.append(Source(sid, "graph", statement(edge), list(edge["chunk_ids"]), list(edge["evidence"]),
                                   {k: edge.get(k) for k in ("source", "source_type", "relation", "target",
-                                                            "target_type")}))
+                                                            "target_type", "status", "years")}))
         return edge_ids.get(key, "")
 
     summaries = []
@@ -85,6 +97,9 @@ def build_context(result: RetrievalResult) -> Context:
                          "direction carefully; if they do not answer the question as asked, say it is not answerable.")
     for row in result.graph_rows:
         ids = [sid for sid in (add_edge(e) for e in row["edges"]) if sid]
+        if "group" in row:  # OVERVIEW: an LLM-written group label; answers must cite the facts, not this
+            summaries.append(f"[group, not citable] {row['group']}: {row['summary']} Members: "
+                             f"{', '.join(row['members'][:12])}. Supporting facts: {', '.join(ids)}.")
         if "count" in row:  # COUNT template: an aggregate over the edges listed with it
             summaries.append(f"[graph aggregate] {row['entity']} has {row['count']} such relationships "
                              f"in the graph (see {', '.join(ids[:10])}).")

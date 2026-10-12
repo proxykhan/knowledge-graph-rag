@@ -12,7 +12,13 @@ CACHE_DIR = DATA_DIR / "cache"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", extra="ignore")
 
-    llm_provider: str = "gemini"           # "gemini" or "claude"
+    llm_provider: str = "gemini"           # answers, routing, group labels: "gemini", "ollama" or "claude"
+    extraction_provider: str = "gemini"    # builds the graph; its cache is keyed by this model
+
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen3:8b"
+    ollama_think: str = "false"            # "false" | "true" (answers) | "all" (answers and routing); slower
+    ollama_num_ctx: int = 8192             # context window; fits an 8 GB GPU alongside the model
 
     gemini_api_key: str = ""
     # 3.7/3.8 Flash: 503 "high demand" on the free tier. 3.5 Flash: only 20 requests/day free.
@@ -33,6 +39,10 @@ class Settings(BaseSettings):
     postgres_dsn: str = "postgresql://kgrag:kgrag-dev-password@localhost:5432/kgrag"
 
     embedding_model: str = "BAAI/bge-small-en-v1.5"
+
+    # Public deployments: questions per client IP (0 = unlimited, the local default)
+    ask_limit_per_minute: int = 0
+    ask_limit_per_day: int = 0
 
 
 settings = Settings()

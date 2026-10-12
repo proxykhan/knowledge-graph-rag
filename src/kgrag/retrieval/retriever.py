@@ -23,7 +23,7 @@ from functools import lru_cache
 from neo4j import GraphDatabase
 
 from kgrag import llm
-from kgrag.config import DATA_DIR, settings
+from kgrag.config import DATA_DIR, PROCESSED_DIR, settings
 from kgrag.retrieval import router, templates
 from kgrag.retrieval.entity_linker import Link, default_linker
 from kgrag.retrieval.templates import QueryType
@@ -52,7 +52,9 @@ class RetrievalResult:
 
 @lru_cache(maxsize=1)
 def _driver():
-    return GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password))
+    # Notifications off: optional properties (status, years) trigger "unknown property" warnings on old graphs.
+    return GraphDatabase.driver(settings.neo4j_uri, auth=(settings.neo4j_user, settings.neo4j_password),
+                                notifications_min_severity="OFF")
 
 
 def build_graph_query(decision: router.RouterDecision, links: list[Link]) -> tuple[str, dict] | None:
@@ -64,7 +66,8 @@ def build_graph_query(decision: router.RouterDecision, links: list[Link]) -> tup
     if qt == QueryType.RELATIONS_OF and ids:
         return templates.relations_of(ids[0], rel, direction)
     if qt == QueryType.SHARED_NEIGHBORS and len(ids) >= 2:
-        return templates.shared_neighbors(ids[:3], rel, direction)
+        n = min(len(ids), 3)
+        return templates.shared_neighbors(ids[:n], hops[:n] if len(hops) >= n else hops[:1])
     if qt == QueryType.CHAIN and ids:
         return templates.chain(ids[0], hops)
     if qt == QueryType.PATH_BETWEEN and len(ids) >= 2:
@@ -74,6 +77,20 @@ def build_graph_query(decision: router.RouterDecision, links: list[Link]) -> tup
     if qt == QueryType.ENTITY_PROFILE and ids:
         return templates.entity_profile(ids[0])
     return None
+
+
+FACTS_PER_GROUP_IN_CONTEXT = 3
+
+
+def overview_rows() -> list[dict]:
+    """Corpus-level questions: one row per company group, with its label and summary (context
+    only, written by an LLM) and a few of its strongest facts (citable, from the filings)."""
+    path = PROCESSED_DIR / "communities.json"
+    if not path.exists():
+        return []
+    groups = json.loads(path.read_text(encoding="utf-8"))
+    return [{"group": g["label"], "summary": g["summary"], "members": [m["name"] for m in g["members"]],
+             "edges": g["facts"][:FACTS_PER_GROUP_IN_CONTEXT]} for g in groups]
 
 
 _FLIP = {templates.Direction.OUT: templates.Direction.IN, templates.Direction.IN: templates.Direction.OUT}
@@ -133,7 +150,11 @@ def retrieve(question: str) -> RetrievalResult:
                     result.unlinked.append(mention)
             result.links = [asdict(l) for l in links]
             query = build_graph_query(decision, links)
-            if query is None:
+            if decision.query_type == QueryType.OVERVIEW:
+                result.graph_rows = overview_rows()
+                if not result.graph_rows:
+                    result.notes.append("no company groups computed yet (run kgrag.graph.communities)")
+            elif query is None:
                 result.notes.append(f"{decision.query_type} needs entities that did not link; vector fallback")
             else:
                 result.graph_rows = templates.run(_driver(), *query)

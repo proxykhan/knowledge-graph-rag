@@ -27,11 +27,13 @@ HNSW_EF_CONSTRUCTION = 64
 
 def passage_text(chunk: dict, header: bool) -> str:
     """Chunks say "we" and "our". The header names the company so a question about
-    NVIDIA can match a chunk whose text never says "NVIDIA"."""
+    NVIDIA can match a chunk whose text never says "NVIDIA", and the fiscal year so that
+    two years of the same company's report can be told apart."""
     if not header:
         return chunk["text"]
     company = COMPANY_NAMES.get(chunk["ticker"], chunk["company"])
-    return f"{company} {chunk['section_path']}\n{chunk['text']}"
+    year = chunk.get("report_date", "")[:4]
+    return f"{company} FY{year} {chunk['section_path']}\n{chunk['text']}"
 
 
 def connect() -> psycopg.Connection:
@@ -44,6 +46,8 @@ def connect() -> psycopg.Connection:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--no-header", action="store_true", help="embed raw chunk text only")
+    parser.add_argument("--entities-only", action="store_true",
+                        help="only refresh each row's entity ids after a graph rebuild (no re-embedding)")
     args = parser.parse_args()
     header = not args.no_header
 
@@ -51,6 +55,14 @@ def main() -> None:
         chunks = [json.loads(line) for line in f]
     entity_map_path = PROCESSED_DIR / "chunk_entities.json"
     chunk_entities = json.loads(entity_map_path.read_text(encoding="utf-8")) if entity_map_path.exists() else {}
+
+    if args.entities_only:
+        with connect() as conn, conn.cursor() as cur:
+            cur.executemany("UPDATE chunks SET entity_ids = %s WHERE chunk_id = %s",
+                            [(chunk_entities.get(c["chunk_id"], []), c["chunk_id"]) for c in chunks])
+            conn.execute("VACUUM ANALYZE chunks")
+        print(f"pgvector: refreshed entity ids on {len(chunks)} chunks")
+        return
 
     print(f"Embedding {len(chunks)} chunks with {settings.embedding_model} (header={header})...")
     vectors = embed.embed_passages([passage_text(c, header) for c in chunks])

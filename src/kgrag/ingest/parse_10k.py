@@ -86,14 +86,32 @@ def split_sections_by_markers(
 
 def split_sections(text: str, items: tuple[str, ...] = ("1", "1A", "7")) -> list[Section]:
     matches = list(ITEM_HEADING.finditer(text))
-    best: dict[str, tuple[int, int]] = {}  # item -> (start, end) of longest occurrence
-
+    spans: dict[str, list[tuple[int, int]]] = {}  # item -> every (start, end) occurrence
     for i, m in enumerate(matches):
-        item = m.group(1).upper()
-        start = m.start()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        if item not in best or (end - start) > (best[item][1] - best[item][0]):
-            best[item] = (start, end)
+        spans.setdefault(m.group(1).upper(), []).append((m.start(), end))
+
+    def longest(item: str, after: int = -1, before: int | None = None) -> tuple[int, int] | None:
+        ok = [sp for sp in spans.get(item, []) if sp[0] > after and (before is None or sp[0] < before)]
+        return max(ok, key=lambda sp: sp[1] - sp[0]) if ok else None
+
+    # The real section is the longest stretch after its heading (the table of contents lists
+    # every heading with almost nothing after it). Order constrains the choice: Business comes
+    # before Risk Factors and MD&A after it, so a later "Item 1" (Microchip's financial
+    # statements) cannot win just because it is long.
+    best: dict[str, tuple[int, int]] = {}
+    anchor = longest("1A")
+    for item in items:
+        if anchor and item == "1A":
+            span = anchor
+        elif anchor and item in ("1",):
+            span = longest(item, before=anchor[0])
+        elif anchor and item in ("7", "7A", "8"):
+            span = longest(item, after=anchor[0])
+        else:
+            span = longest(item)
+        if span:
+            best[item] = span
 
     sections = []
     for item in items:

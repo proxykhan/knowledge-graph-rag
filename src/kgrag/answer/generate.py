@@ -11,6 +11,8 @@ fail are dropped and reported rather than shown, so every citation in the final 
 resolves to a chunk that was actually retrieved.
 """
 
+import hashlib
+import json
 import re
 import sys
 import time
@@ -20,6 +22,9 @@ from pydantic import BaseModel, Field
 
 from kgrag import llm
 from kgrag.answer.context import Context, build_context
+from kgrag.config import CACHE_DIR, PROCESSED_DIR
+from kgrag.extract.prompt import PROMPT_VERSION
+from kgrag.retrieval import router
 from kgrag.retrieval.retriever import retrieve, retrieve_vector_only
 
 MAX_ATTEMPTS = 3
@@ -76,6 +81,7 @@ class Answer:
     tokens_out: int = 0
     mode: str = "hybrid"
     sources: list[dict] = field(default_factory=list)  # everything retrieved, with "cited" marked
+    cached: bool = False
 
 
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -126,7 +132,36 @@ def _render_claims(claims: list[Claim], ctx: Context) -> tuple[str, list[dict]]:
     return " ".join(rendered), out
 
 
-def answer(question: str, mode: str = "hybrid") -> Answer:
+ANSWER_CACHE = CACHE_DIR / "answers"
+
+
+def _cache_key(question: str, mode: str) -> str:
+    """Everything that can change an answer is in the key, so a cached answer can never
+    outlive the router, prompt, model or graph build that produced it."""
+    entities = PROCESSED_DIR / "entities.json"
+    graph_build = int(entities.stat().st_mtime) if entities.exists() else 0
+    parts = [" ".join(question.lower().split()), mode, router.ROUTER_VERSION, PROMPT_VERSION,
+             llm.model_name(), str(graph_build)]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:24]
+
+
+def answer(question: str, mode: str = "hybrid", use_cache: bool = False) -> Answer:
+    """Cached front for _answer. The API uses the cache; benchmarks do not, so their latency is real."""
+    if not use_cache:
+        return _answer(question, mode)
+    path = ANSWER_CACHE / f"{_cache_key(question, mode)}.json"
+    if path.exists():
+        start = time.perf_counter()
+        cached = Answer(**json.loads(path.read_text(encoding="utf-8")))
+        cached.cached, cached.latency_ms = True, round((time.perf_counter() - start) * 1000)
+        return cached
+    result = _answer(question, mode)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(asdict(result), ensure_ascii=False), encoding="utf-8")
+    return result
+
+
+def _answer(question: str, mode: str = "hybrid") -> Answer:
     """mode: "hybrid" (router + graph/vector) or "vector" (the plain vector RAG baseline).
     Both use the same generator and the same citation checks."""
     start = time.perf_counter()

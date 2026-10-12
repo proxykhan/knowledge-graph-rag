@@ -67,6 +67,7 @@
   .tag { font-size: 12.5px; padding: 4px 10px; border-radius: 20px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); }
   .tag.good { background: var(--good-soft); border-color: #CBE7D5; color: var(--good); }
   .tag.blue { background: var(--accent-soft); border-color: #D3DFF7; color: var(--accent); }
+  .tag.warn { background: var(--warn-soft); border-color: #F3D9AC; color: var(--warn); }
   .refusal { background: var(--warn-soft); border: 1px solid #F3D9AC; border-radius: 10px; padding: 14px 16px; }
   .refusal strong { color: var(--warn); }
 
@@ -152,7 +153,7 @@
       </div>
       <div class="brand">
         <h1>Filing Explorer</h1>
-        <p>Ask about NVIDIA, AMD, Intel, Micron and Applied Materials. Every answer comes with proof from their annual reports.</p>
+        <p>Ask about 20 semiconductor companies (NVIDIA, AMD, Intel, Micron, TSMC's customers and suppliers…). Every answer comes with proof from their annual reports.</p>
       </div>
       <div class="status" id="status"><span class="dot" id="statusDot"></span><span id="statusText">Connecting…</span></div>
     </div>
@@ -172,7 +173,7 @@
   <div class="card">
     <form class="askbox" id="askForm">
       <input id="question" type="text" autocomplete="off" maxlength="500"
-             placeholder="Ask anything about these five companies…" aria-label="Your question">
+             placeholder="Ask anything about these companies…" aria-label="Your question">
       <button class="btn" id="askBtn" type="submit">Ask</button>
     </form>
     <div class="examples">
@@ -181,6 +182,9 @@
         <button class="chip" data-q="Who supplies the competitors of Micron's customers?">Who supplies the competitors of Micron's customers?</button>
         <button class="chip" data-q="Which companies have NVIDIA's competitors acquired?">Which companies have NVIDIA's competitors acquired?</button>
         <button class="chip" data-q="Which suppliers do NVIDIA and AMD share?">Which suppliers do NVIDIA and AMD share?</button>
+        <button class="chip" data-q="Which supplier serves NVIDIA, AMD and Intel?">Which supplier serves NVIDIA, AMD and Intel?</button>
+        <button class="chip" data-q="How did Intel's subsidiaries change between its last two annual reports?">How did Intel's subsidiaries change between its last two reports?</button>
+        <button class="chip" data-q="What are the main groups of companies in these filings?">What are the main groups of companies?</button>
       </div>
       <div>
         <h4>A single fact</h4>
@@ -239,13 +243,18 @@
 <section role="tabpanel" id="tab-explore" aria-labelledby="t-explore" hidden>
   <div class="card">
     <h2>Explore the relationship map</h2>
-    <p class="muted" style="margin-top:-4px">The system read the five annual reports and recorded who supplies, competes with, partners with or bought whom. Pick a company or anything else to see its connections.</p>
+    <p class="muted" style="margin-top:-4px">The system read the annual reports of 20 semiconductor companies (two years for five of them) and recorded who supplies, competes with, partners with or bought whom. Pick a company or anything else to see its connections.</p>
     <form class="explore-bar" id="exploreForm">
       <input id="exploreInput" list="entityList" placeholder="Type a name, e.g. TSMC, Samsung, Mobileye…" aria-label="Entity name">
       <datalist id="entityList"></datalist>
       <button class="btn" type="submit" style="padding:11px 20px">Show</button>
     </form>
     <div class="quick" id="quickPicks"></div>
+  </div>
+  <div class="card" style="margin-top:18px" id="groupsCard" hidden>
+    <h2>Groups of closely connected companies</h2>
+    <p class="muted small" style="margin-top:-6px">Found automatically: companies that supply, compete with, partner with or own each other more than they connect to anyone else. Labels are written by the AI from the facts; click a name to explore it.</p>
+    <div id="groupsList" class="examples"></div>
   </div>
   <div id="exploreResult" hidden>
     <div class="grid2">
@@ -348,7 +357,12 @@
 <script>
 "use strict";
 /* ---------- plain-language helpers ---------- */
-const COMPANIES = { NVDA: "NVIDIA", AMD: "AMD", INTC: "Intel", MU: "Micron", AMAT: "Applied Materials" };
+const COMPANIES = {
+  NVDA: "NVIDIA", AMD: "AMD", INTC: "Intel", MU: "Micron", AMAT: "Applied Materials", QCOM: "Qualcomm",
+  AVGO: "Broadcom", TXN: "Texas Instruments", ADI: "Analog Devices", MRVL: "Marvell", ON: "onsemi",
+  MCHP: "Microchip", NXPI: "NXP", SWKS: "Skyworks", QRVO: "Qorvo", WDC: "Western Digital",
+  LRCX: "Lam Research", KLAC: "KLA", ENTG: "Entegris", AMKR: "Amkor"
+};
 const SECTIONS = { "1": "Business overview", "1A": "Risk factors", "7": "Management's discussion" };
 const VERB = {
   SUPPLIES: "supplies", COMPETES_WITH: "competes with", PARTNERS_WITH: "partners with",
@@ -518,7 +532,8 @@ function drawGraph(container, edges, opts = {}) {
     if (!strong) line.setAttribute("stroke-dasharray", "4 4");
     if (!UNDIRECTED.has(l.e.relation)) line.setAttribute("marker-end", `url(#${strong ? "b" : "a"}${uid})`);
     const label = document.createElementNS(NS, "text");
-    label.textContent = VERB[l.e.relation] || l.e.relation;
+    label.textContent = (VERB[l.e.relation] || l.e.relation) + (l.e.status === "past" ? " (ended)" : l.e.status === "planned" ? " (planned)" : "");
+    if (l.e.status === "past") line.setAttribute("stroke-dasharray", "2 4");
     label.setAttribute("font-size", "13");
     label.setAttribute("fill", strong ? "#2F5FC4" : "#8A95A5");
     label.setAttribute("text-anchor", "middle");
@@ -678,7 +693,7 @@ function showAnswer(a) {
     `<span class="tag blue">${esc(route)}</span>`,
     `<span class="tag good">${esc(checks)}</span>`,
     a.answerable ? `<span class="tag">${order.length} source${order.length === 1 ? "" : "s"}</span>` : "",
-    `<span class="tag">Took ${(a.latency_ms / 1000).toFixed(1)} s</span>`
+    a.cached ? `<span class="tag good">Instant (saved answer)</span>` : `<span class="tag">Took ${(a.latency_ms / 1000).toFixed(1)} s</span>`
   ].join("");
 
   // graph: cited facts, optionally everything retrieved
@@ -733,6 +748,14 @@ function showAnswer(a) {
   $("askResult").hidden = false;
 }
 
+function timeTags(edge) {
+  if (!edge) return "";
+  const status = edge.status === "past" ? `<span class="tag warn">ended</span>`
+    : edge.status === "planned" ? `<span class="tag blue">planned</span>` : "";
+  const years = (edge.years || []).length ? `<span class="tag">reported in ${edge.years.map(y => "FY" + y).join(", ")}</span>` : "";
+  return status || years ? `<div class="meta" style="margin:4px 0 6px">${status}${years}</div>` : "";
+}
+
 function sourceCard(s, n) {
   const chunk = s.chunk_ids[0];
   const d = describeChunk(chunk);
@@ -743,13 +766,13 @@ function sourceCard(s, n) {
   return `<div class="source" data-id="${esc(s.id)}">
     <div class="source-head">${n ? `<span class="ref">${n}</span>` : `<span class="tag">not used</span>`}
       <span><b>${esc(d.title)}</b> · ${esc(d.sub)}${esc(extra)}</span></div>
-    ${fact}<div class="quote">"${esc(quote)}"</div>
+    ${fact}${timeTags(s.edge)}<div class="quote">"${esc(quote)}"</div>
     <button class="linkbtn" data-chunk="${esc(chunk)}" data-quote="${esc(s.kind === "graph" ? (s.evidence[0] || "") : "")}">Read the original passage →</button>
   </div>`;
 }
 
 /* ---------- explore ---------- */
-const QUICK = ["NVIDIA", "AMD", "Intel", "Micron", "Applied Materials", "TSMC", "Samsung", "Mobileye"];
+const QUICK = ["NVIDIA", "AMD", "Intel", "Micron", "Applied Materials", "Lam Research", "Qualcomm", "TSMC", "Samsung"];
 $("quickPicks").innerHTML = QUICK.map(q => `<button class="btn ghost" type="button" data-e="${esc(q)}">${esc(q)}</button>`).join("");
 $("quickPicks").querySelectorAll("button").forEach(b => b.addEventListener("click", () => { $("exploreInput").value = b.dataset.e; explore(); }));
 $("exploreForm").addEventListener("submit", e => { e.preventDefault(); explore(); });
@@ -802,7 +825,7 @@ function renderExplore() {
   $("exploreFacts").innerHTML = Object.entries(groups).map(([rel, list]) => `<div class="fact-group"><h4>${esc(GROUP[rel] || rel)}</h4>` +
     list.map(e => {
       const d = describeChunk(e.chunk_ids[0]);
-      return `<div class="source"><div class="fact">${esc(shortName(e.source))} ${esc(VERB[e.relation] || e.relation)} ${esc(shortName(e.target))}</div>
+      return `<div class="source"><div class="fact">${esc(shortName(e.source))} ${esc(VERB[e.relation] || e.relation)} ${esc(shortName(e.target))}</div>${timeTags(e)}
         <div class="quote">"${esc(e.evidence[0] || "")}"</div>
         <div class="source-head" style="margin:0 0 4px">${esc(d.title)} · ${esc(d.sub)}</div>
         <button class="linkbtn" data-chunk="${esc(e.chunk_ids[0])}" data-quote="${esc(e.evidence[0] || "")}">Read the original passage →</button></div>`;
@@ -810,6 +833,22 @@ function renderExplore() {
   $("exploreFacts").querySelectorAll("[data-chunk]").forEach(b =>
     b.addEventListener("click", () => openPassage(b.dataset.chunk, b.dataset.quote)));
 }
+
+/* ---------- groups (community detection) ---------- */
+fetch("/communities").then(r => r.json()).then(groups => {
+  if (!groups.length) return;
+  $("groupsList").innerHTML = groups.map(g => `<div class="source">
+      <div class="fact">${esc(g.label)}</div>
+      <p class="small muted" style="margin:2px 0 8px">${esc(g.summary)}</p>
+      <div class="quick">${g.members.slice(0, 10).map(m =>
+        `<button class="btn ghost" type="button" data-e="${esc(m.name)}" style="padding:4px 10px;font-size:12.5px">${esc(shortName(m.name))}</button>`).join("")}
+        ${g.members.length > 10 ? `<span class="small muted">+${g.members.length - 10} more</span>` : ""}</div>
+    </div>`).join("");
+  $("groupsList").querySelectorAll("[data-e]").forEach(b => b.addEventListener("click", () => {
+    $("exploreInput").value = b.dataset.e; explore(); $("exploreResult").scrollIntoView({ behavior: "smooth" });
+  }));
+  $("groupsCard").hidden = false;
+}).catch(() => {});
 
 /* ---------- how it works: the example chain ---------- */
 let howDrawn = false;

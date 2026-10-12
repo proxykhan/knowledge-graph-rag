@@ -1,0 +1,435 @@
+{
+  "summary": {
+    "set": "dev",
+    "router_version": "v4",
+    "n": 19,
+    "route_accuracy": 1.0,
+    "route_and_query_type_accuracy": 0.9473684210526315,
+    "hops_correct": "16/18",
+    "graph_questions_with_rows": "15/18",
+    "rescued_by_direction_retry": 2,
+    "route_used": {
+      "GRAPH": 15,
+      "VECTOR": 4
+    }
+  },
+  "rows": [
+    {
+      "id": "d01",
+      "question": "Which companies buy from TSMC?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "RELATIONS_OF",
+      "query_type": "RELATIONS_OF",
+      "expected_hops": [
+        "SUPPLIES/out"
+      ],
+      "hops": [
+        "SUPPLIES/out"
+      ],
+      "hops_ok": true,
+      "confidence": 1.0,
+      "route_used": "GRAPH",
+      "graph_rows": 6,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d02",
+      "question": "Who are Samsung's customers?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "RELATIONS_OF",
+      "query_type": "RELATIONS_OF",
+      "expected_hops": [
+        "SUPPLIES/out"
+      ],
+      "hops": [
+        "SUPPLIES/out"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 3,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d03",
+      "question": "What are the subsidiaries of Intel?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "RELATIONS_OF",
+      "query_type": "RELATIONS_OF",
+      "expected_hops": [
+        "SUBSIDIARY_OF/in"
+      ],
+      "hops": [
+        "SUBSIDIARY_OF/out"
+      ],
+      "hops_ok": false,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 6,
+      "direction_reversed": true,
+      "notes": [
+        "no rows as read; found facts with reversed hop 1"
+      ],
+      "unlinked": []
+    },
+    {
+      "id": "d04",
+      "question": "Who owns Mobileye?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "RELATIONS_OF",
+      "query_type": "RELATIONS_OF",
+      "expected_hops": [
+        "SUBSIDIARY_OF/out"
+      ],
+      "hops": [
+        "ACQUIRED/in"
+      ],
+      "hops_ok": false,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 1,
+      "direction_reversed": true,
+      "notes": [
+        "no rows as read; found facts with reversed hop 1"
+      ],
+      "unlinked": []
+    },
+    {
+      "id": "d05",
+      "question": "Which company acquired Xilinx?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "RELATIONS_OF",
+      "query_type": "RELATIONS_OF",
+      "expected_hops": [
+        "ACQUIRED/in"
+      ],
+      "hops": [
+        "ACQUIRED/in"
+      ],
+      "hops_ok": true,
+      "confidence": 1.0,
+      "route_used": "GRAPH",
+      "graph_rows": 1,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d06",
+      "question": "Who are the executives of NVIDIA?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "RELATIONS_OF",
+      "query_type": "RELATIONS_OF",
+      "expected_hops": [
+        "EXECUTIVE_OF/in"
+      ],
+      "hops": [
+        "EXECUTIVE_OF/in"
+      ],
+      "hops_ok": true,
+      "confidence": 1.0,
+      "route_used": "GRAPH",
+      "graph_rows": 5,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d07",
+      "question": "Who supplies the customers of Samsung?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "CHAIN",
+      "query_type": "CHAIN",
+      "expected_hops": [
+        "SUPPLIES/out",
+        "SUPPLIES/in"
+      ],
+      "hops": [
+        "SUPPLIES/out",
+        "SUPPLIES/in"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 17,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d08",
+      "question": "What do the customers of Fabrinet make?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "CHAIN",
+      "query_type": "CHAIN",
+      "expected_hops": [
+        "SUPPLIES/out",
+        "PRODUCES/out"
+      ],
+      "hops": [
+        "SUPPLIES/out",
+        "PRODUCES/out"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 50,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d09",
+      "question": "Who are the rivals of SK hynix's customers?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "CHAIN",
+      "query_type": "CHAIN",
+      "expected_hops": [
+        "SUPPLIES/out",
+        "COMPETES_WITH/any"
+      ],
+      "hops": [
+        "SUPPLIES/out",
+        "COMPETES_WITH/any"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 19,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d10",
+      "question": "Which markets does the parent company of Mobileye serve?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "CHAIN",
+      "query_type": "CHAIN",
+      "expected_hops": [
+        "SUBSIDIARY_OF/out",
+        "SERVES_MARKET/out"
+      ],
+      "hops": [
+        "SUBSIDIARY_OF/out",
+        "SERVES_MARKET/out"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 7,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d11",
+      "question": "What does the company that acquired Mellanox produce?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "CHAIN",
+      "query_type": "CHAIN",
+      "expected_hops": [
+        "ACQUIRED/in",
+        "PRODUCES/out"
+      ],
+      "hops": [
+        "ACQUIRED/in",
+        "PRODUCES/out"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 50,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d12",
+      "question": "Which technologies do Intel, AMD and NVIDIA all use?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "SHARED_NEIGHBORS",
+      "query_type": "SHARED_NEIGHBORS",
+      "expected_hops": [
+        "USES_TECHNOLOGY/out"
+      ],
+      "hops": [
+        "USES_TECHNOLOGY/out"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "VECTOR",
+      "graph_rows": 0,
+      "direction_reversed": false,
+      "notes": [
+        "graph returned no rows; vector fallback"
+      ],
+      "unlinked": []
+    },
+    {
+      "id": "d13",
+      "question": "Which competitors do Micron and Intel have in common?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "SHARED_NEIGHBORS",
+      "query_type": "SHARED_NEIGHBORS",
+      "expected_hops": [
+        "COMPETES_WITH/any"
+      ],
+      "hops": [
+        "COMPETES_WITH/any"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 1,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d14",
+      "question": "How much did NVIDIA pay to acquire Mellanox?",
+      "expected_route": "VECTOR",
+      "route": "VECTOR",
+      "expected_query_type": "NONE",
+      "query_type": "NONE",
+      "expected_hops": null,
+      "hops": [],
+      "hops_ok": null,
+      "confidence": 0.95,
+      "route_used": "VECTOR",
+      "graph_rows": 0,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d15",
+      "question": "Which of AMD's competitors does Intel list as partners?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "SHARED_NEIGHBORS",
+      "query_type": "SHARED_NEIGHBORS",
+      "expected_hops": [
+        "COMPETES_WITH/any",
+        "PARTNERS_WITH/any"
+      ],
+      "hops": [
+        "COMPETES_WITH/any",
+        "PARTNERS_WITH/any"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 1,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d16",
+      "question": "Which of Marvell's competitors are also Broadcom's competitors?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "SHARED_NEIGHBORS",
+      "query_type": "SHARED_NEIGHBORS",
+      "expected_hops": [
+        "COMPETES_WITH/any"
+      ],
+      "hops": [
+        "COMPETES_WITH/any"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "VECTOR",
+      "graph_rows": 0,
+      "direction_reversed": false,
+      "notes": [
+        "graph returned no rows; vector fallback"
+      ],
+      "unlinked": []
+    },
+    {
+      "id": "d17",
+      "question": "Which customers do Applied Materials and Lam Research have in common?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "SHARED_NEIGHBORS",
+      "query_type": "SHARED_NEIGHBORS",
+      "expected_hops": [
+        "SUPPLIES/out"
+      ],
+      "hops": [
+        "SUPPLIES/out"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "VECTOR",
+      "graph_rows": 0,
+      "direction_reversed": false,
+      "notes": [
+        "graph returned no rows; vector fallback"
+      ],
+      "unlinked": []
+    },
+    {
+      "id": "d18",
+      "question": "How did Intel's subsidiaries change between its last two annual reports?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "RELATIONS_OF",
+      "query_type": "RELATIONS_OF",
+      "expected_hops": [
+        "SUBSIDIARY_OF/in"
+      ],
+      "hops": [
+        "SUBSIDIARY_OF/in"
+      ],
+      "hops_ok": true,
+      "confidence": 0.95,
+      "route_used": "GRAPH",
+      "graph_rows": 6,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    },
+    {
+      "id": "d19",
+      "question": "Which suppliers did NVIDIA mention in its earlier report but not in its latest one?",
+      "expected_route": "GRAPH",
+      "route": "GRAPH",
+      "expected_query_type": "RELATIONS_OF",
+      "query_type": "COUNT",
+      "expected_hops": [
+        "SUPPLIES/in"
+      ],
+      "hops": [
+        "SUPPLIES/in"
+      ],
+      "hops_ok": true,
+      "confidence": 0.7,
+      "route_used": "GRAPH",
+      "graph_rows": 1,
+      "direction_reversed": false,
+      "notes": [],
+      "unlinked": []
+    }
+  ]
+}

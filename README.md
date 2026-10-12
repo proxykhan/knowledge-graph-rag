@@ -2,7 +2,7 @@
 
 **Hybrid knowledge graph + vector RAG over SEC 10-K filings. On 15 pre-registered questions answered from filing text, it raised accuracy from 47% to 73% against a vector-only baseline (two-hop 20% → 60%), at 13 s p95 on a free-tier LLM.**
 
-Corpus: the latest 10-Ks of NVIDIA, AMD, Intel, Micron and Applied Materials (404 chunks). **Stack:** Python · Neo4j · pgvector · LangChain (text splitting) · Gemini API (free tier; Claude switchable) · sentence-transformers · FastAPI
+Corpus: the latest 10-Ks of 20 semiconductor companies, plus the previous year for NVIDIA, AMD, Intel, Micron and Applied Materials (25 filings, 1,934 chunks). Results below marked *v3* were measured on the first 5 filings; see **Expansion** for the 25-filing build. **Stack:** Python · Neo4j · pgvector · LangChain (text splitting) · Gemini API (free tier; Claude switchable) · sentence-transformers · FastAPI
 
 ## Results
 
@@ -51,6 +51,44 @@ The gap is real but smaller than on the main set, as expected for questions not 
 - *Incomplete lists:* "what does the company that acquired ZT Systems make" listed real AMD products but not the EPYC and Ryzen lines the key requires.
 - *Routing:* a question describing a person's career ("the former CFO of a company AMD acquired") went to vectors and was refused.
 
+## Expansion (25 filings, time-aware facts, local model)
+
+| | First build | Expanded build |
+|---|---|---|
+| Filings | 5 (latest year) | **25**: 20 companies, two years for 5 of them |
+| Chunks | 404 | **1,934** |
+| Graph | 424 entities, 454 facts | **1,184 entities, 1,598 facts** |
+| Extraction | Gemini Flash-Lite, prompt v3 | Gemini Flash-Lite, prompt v4 (time-aware): 491 requests, **$4.15** paid-tier equivalent, $0 on the free tier |
+
+**What was added**
+
+- **Time-aware facts.** Every relationship is `current`, `past` (ended: sold, former role) or `planned` (announced, agreed), as of its report date; edges record which fiscal years' reports mention them. Status comes from the most recent report, and evidence is ordered newest first with hedged sentences ("if", "would", "in such event") last. This fixed two stale facts: Altera (51% sold in 2025) and Mr. Hill (a former Intel CFO, now at Applied Materials) are now marked ended. A completed acquisition is forced to stay current in code, because the model tends to call past-tense acquisitions "past".
+- **Mixed-relation intersections.** Shared-neighbour queries accept one hop per entity: "which of NVIDIA's *suppliers* does Micron name as *competitors*".
+- **Company groups.** Louvain community detection (networkx, fixed seed) over current company-to-company links found 10 groups (equipment makers and memory; RF chips; automotive; NVIDIA's ecosystem; ...). An LLM labels each group, but answers must cite the group's facts, never the label. New query type `OVERVIEW` ("what are the main groups of companies?").
+- **Local model.** `LLM_PROVIDER=ollama` answers, routes and labels with `qwen3:8b` on an 8 GB laptop GPU: free, unlimited, offline. The graph-building model is a separate setting (`EXTRACTION_PROVIDER`), so switching the answering model never invalidates the graph.
+- **Speed and deployment.** Answer cache (keyed by question, router, prompt, model and graph build; benchmarks bypass it); `docker compose --profile app up` runs the whole system; per-visitor rate limits for public deployments; see [docs/DEPLOY.md](docs/DEPLOY.md).
+
+**Measured on the expanded build**
+
+| | Value |
+|---|---|
+| Retrieval recall@5 / @10 (30 questions) | 0.77 / 0.80 (was 0.83 / 0.90 on 404 chunks: more similar passages compete) |
+| HNSW vs exact search | 2.2 ms vs 7.1 ms at the same results (99-100% overlap); the index starts to pay off at this size |
+| Router, qwen3:8b, 19 dev questions | 17/19 routes, 15/18 hop directions (Gemini v3: 13/13 on the first 13) |
+| Router with thinking on | 18/19, 16/18, but 3x slower; off by default (`OLLAMA_THINK=all` to enable) |
+
+**Benchmark with the local model (partial run: 45-46 of 50 questions per system; stopped to save time)**
+
+| Question type | Vector RAG | Hybrid (qwen3:8b, 25 filings) | Hybrid (Gemini, 5 filings, v3) |
+|---|---|---|---|
+| Single hop | 75% | 83% | 75% |
+| Two hop | 8% | 58% | 83% |
+| Three hop | 0% | 75% | 100% |
+| Aggregation | 88% | 62% | 75% |
+| **All answered** | 48% | **71%** | 86% |
+
+Same direction as before (the graph still wins clearly on chained questions), but the free local model is less accurate than Gemini Flash-Lite, mostly on two-hop questions. The pre-registered 15-question set was not re-run on this build.
+
 ## Web interface
 
 `uvicorn kgrag.api:app --port 8000`, then open **http://localhost:8000**. Written for non-technical readers:
@@ -76,6 +114,7 @@ Ingestion writes two stores that share one key, `chunk_id`: every graph edge lis
 - [x] Phase 4: merged context + validated citations, FastAPI endpoint
 - [x] Phase 5: benchmark vs. vector-only baseline (results at the top)
 - [x] Router v3 and independent checks: pre-registered question set, auto-generated text-only set
+- [x] Expansion: 25 filings, time-aware facts, mixed-relation queries, company groups, local model, Docker
 
 ## Retrieval quality (Phase 2)
 
@@ -171,6 +210,10 @@ uvicorn kgrag.api:app --port 8000   # then open http://localhost:8000/docs
 - **Newest Gemini models were unusable on the free tier.** `gemini-3.8-flash` and `gemini-3.7-flash` returned 503 "high demand" (and one 504 after 60s) even for a one-word prompt; `gemini-3.5-flash` answered in ~1.5s, so the pipeline uses it.
 - **Prompt v1 copied the SEC's raw company title** ("APPLIED MATERIALS INC /DE") as the entity name and wrote long descriptive names ("export controls enacted by the United States government"). v2 passes clean legal names and asks for short standard names for non-company entities.
 - **Gemini 3.5 Flash's free tier allows only 20 requests/day.** Found from the 429 error body after 12 chunks. Switched to Gemini 3.5 Flash-Lite and 4 chunks per request (~101 requests for 404 chunks). On an 8-chunk comparison Flash-Lite matched Flash on company-to-company relationships but skipped the filer's own market/technology/regulation links in 3 of 8 chunks, so those relationship types are under-covered.
+- **The new Gemini models and quotas kept moving.** Flash-Lite's free tier turned out to be 500 requests/day; one day of routing, benchmarks and extraction used it up, and extraction finished the next day. Running 6 requests in parallel (within the same pacing) took extraction from ~3 to ~40 chunks per minute.
+- **More filings broke parsing in new ways.** Microchip's "Item 1" picked up its financial statements (the longest-occurrence rule chose a later heading); fixed generally by requiring Business before Risk Factors and MD&A after it. Intel changed its section headings between years, so its markers are now per filing, not per company.
+- **The local model is weaker.** qwen3:8b routes and answers well enough to keep the graph's advantage, but scores below Gemini Flash-Lite; its group labels are also generic ("Competitors and ... in the Semiconductor Industry").
+- **Some merges are debatable.** Entity resolution folded CPRA (an amendment) into the California Consumer Privacy Act.
 - **Auto-generated "blind" questions measured the wrong thing.** Random passage pairs that share a name rarely contain a chain, so the generator joined unrelated facts with "and". Useful as a robustness check, but the independent multi-hop test needed questions written first and answered from text afterwards (set 2).
 - **The extractor recorded a stale fact.** Intel's 10-K calls Altera "our wholly owned subsidiary as of that date" in the sentence announcing the sale of 51% of it, so the graph says Altera is an Intel subsidiary. Verbatim evidence guarantees the quote exists, not that the fact is still true; Altera was excluded from benchmark answer keys.
 - **The router eval (24/24) overstated accuracy.** On the independent benchmark the router sent 2 of 20 multi-hop questions to vectors and chose a wrong hop direction on 2 more.

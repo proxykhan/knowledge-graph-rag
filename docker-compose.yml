@@ -23,6 +23,27 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
 
+  # The API + web interface. Not started by a plain `docker compose up` (local development runs
+  # uvicorn directly); start everything with:  docker compose --profile app up -d --build
+  app:
+    profiles: ["app"]
+    build: .
+    container_name: kgrag-app
+    ports:
+      - "8000:8000"   # web interface: http://localhost:8000
+    env_file: .env
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      POSTGRES_DSN: postgresql://kgrag:${POSTGRES_PASSWORD:-kgrag-dev-password}@postgres:5432/kgrag
+      OLLAMA_URL: http://host.docker.internal:11434   # Ollama running on the host machine
+    volumes:
+      - ./data:/app/data          # processed files, caches, logs
+      - hf_cache:/app/.hf-cache   # the embedding model, downloaded once
+    depends_on:
+      - neo4j
+      - postgres
+
 volumes:
   neo4j_data:
   pg_data:
+  hf_cache:

@@ -11,7 +11,7 @@ HOSTILE = "x'}) MATCH (n) DETACH DELETE n //"
 
 @pytest.mark.parametrize("query", [
     T.relations_of(HOSTILE, R.SUPPLIES, T.Direction.IN),
-    T.shared_neighbors([HOSTILE, HOSTILE, HOSTILE], R.SUPPLIES, T.Direction.IN),
+    T.shared_neighbors([HOSTILE, HOSTILE, HOSTILE], [(R.SUPPLIES, T.Direction.IN)]),
     T.chain(HOSTILE, [(R.COMPETES_WITH, T.Direction.ANY), (R.SUPPLIES, T.Direction.IN)]),
     T.path_between(HOSTILE, HOSTILE),
     T.count(HOSTILE, None, T.Direction.ANY),
@@ -38,7 +38,17 @@ def test_template_needs_its_entities():
     assert build_graph_query(_decision(query_type="SHARED_NEIGHBORS"), [_link("company:nvidia")]) is None
     cypher, params = build_graph_query(_decision(query_type="SHARED_NEIGHBORS"),
                                        [_link("company:nvidia"), _link("company:amd")])
-    assert params == {"a0": "company:nvidia", "a1": "company:amd", "rel": "SUPPLIES"}
+    assert params == {"a0": "company:nvidia", "a1": "company:amd", "rel0": "SUPPLIES", "rel1": "SUPPLIES"}
+
+
+def test_shared_neighbors_with_a_different_relation_per_entity():
+    cypher, params = build_graph_query(
+        _decision(query_type="SHARED_NEIGHBORS", entities=["NVIDIA", "Micron"],
+                  hops=[{"relation": "SUPPLIES", "direction": "in"},
+                        {"relation": "COMPETES_WITH", "direction": "any"}]),
+        [_link("company:nvidia"), _link("company:micron-technology")])
+    assert params["rel0"] == "SUPPLIES" and params["rel1"] == "COMPETES_WITH"
+    assert "(a0:Entity {id: $a0})<-[r0]-(n:Entity)" in cypher and "(a1:Entity {id: $a1})-[r1]-(n)" in cypher
 
 
 def test_any_relation_becomes_null_parameter():
@@ -91,3 +101,14 @@ def test_reversed_variants_flip_directed_hops_fewest_first():
     variants = reversed_variants(d)
     dirs = [[h.direction.value for h in v.hops] for v, _ in variants]
     assert dirs == [["out", "any", "in"], ["in", "any", "out"], ["out", "any", "out"]]  # "any" never flipped
+
+
+def test_community_detection_separates_dense_groups():
+    from kgrag.graph.communities import detect
+
+    def link(a, b):
+        return {"a": a, "b": b}
+    memory = [link(x, y) for x, y in [("mu", "samsung"), ("mu", "hynix"), ("samsung", "hynix"), ("mu", "kioxia")]]
+    gpus = [link(x, y) for x, y in [("nvda", "amd"), ("nvda", "intel"), ("amd", "intel"), ("nvda", "qcom")]]
+    groups = detect(memory + gpus + [link("hynix", "nvda")])   # one bridge between the clusters
+    assert {"mu", "samsung", "hynix", "kioxia"} in groups and {"nvda", "amd", "intel", "qcom"} in groups

@@ -16,6 +16,7 @@ data/processed/chunk_entities.json (chunk id -> entity ids) for the pgvector ind
 
 import argparse
 import json
+import re
 from collections import defaultdict
 
 from neo4j import GraphDatabase
@@ -55,19 +56,42 @@ def build_rows() -> tuple[list[dict], list[dict], list[dict], list[dict], dict[s
                 continue
             if s == t:  # two aliases of one entity, e.g. a subsidiary resolved into its parent
                 continue
-            fact = facts.setdefault((s, r["relation"], t), {"s": s, "t": t, "rel": r["relation"],
-                                                            "chunk_ids": [], "evidence": [], "confidence": 0.0})
-            if cid not in fact["chunk_ids"]:
-                fact["chunk_ids"].append(cid)
-                fact["evidence"].append(r["evidence"])
-            fact["confidence"] = max(fact["confidence"], r["confidence"])
+            meta = chunk_meta.get(cid, {})
+            facts.setdefault((s, r["relation"], t), {"s": s, "t": t, "rel": r["relation"], "mentions": {}})
+            # one mention per chunk: (chunk id) -> evidence, status, confidence, report date
+            facts[(s, r["relation"], t)]["mentions"].setdefault(cid, {
+                "chunk_id": cid, "evidence": r["evidence"], "status": r.get("status", "current"),
+                "confidence": r["confidence"], "report_date": meta.get("report_date", "")})
     if unresolved:
         print(f"[warn] {unresolved} relationships reference names missing from entities.json; "
               "re-run kgrag.graph.resolve after extraction")
 
     chunks = [chunk_meta[cid] for cid in sorted(mentions) if cid in chunk_meta]
     mention_rows = [{"chunk": cid, "entity": eid} for cid, eids in mentions.items() for eid in sorted(eids)]
-    return entities, chunks, mention_rows, list(facts.values()), {c: sorted(e) for c, e in mentions.items()}
+    return (entities, chunks, mention_rows, [summarize_fact(f) for f in facts.values()],
+            {c: sorted(e) for c, e in mentions.items()})
+
+
+# Words that make a quote a hypothetical or a hedge rather than a statement of fact.
+HEDGES = re.compile(r"\b(if|in such event|may|might|could|would|expect|potential(ly)?|plan(s|ned)? to)\b", re.I)
+STATUS_PRIORITY = {"past": 0, "planned": 1, "current": 2}  # within one report, an ending is the newer news
+
+
+def summarize_fact(fact: dict) -> dict:
+    """Collapse all mentions of one (source, relation, target) into one edge.
+
+    years: fiscal years whose reports mention it. status: from the most recent report that
+    mentions it. Evidence is ordered newest report first, plain statements before hedged ones,
+    so evidence[0] is the best quote to show.
+    """
+    ms = list(fact["mentions"].values())
+    latest = max(m["report_date"] for m in ms)
+    status = min((m["status"] for m in ms if m["report_date"] == latest), key=STATUS_PRIORITY.get)
+    ms.sort(key=lambda m: (m["report_date"] != latest, bool(HEDGES.search(m["evidence"])), -m["confidence"]))
+    return {"s": fact["s"], "t": fact["t"], "rel": fact["rel"], "status": status,
+            "years": sorted({int(m["report_date"][:4]) for m in ms if m["report_date"]}),
+            "chunk_ids": [m["chunk_id"] for m in ms], "evidence": [m["evidence"] for m in ms],
+            "confidence": max(m["confidence"] for m in ms)}
 
 
 def _batched(rows: list[dict]):
@@ -122,6 +146,7 @@ def main() -> None:
                     MATCH (s:Entity {{id: row.s}}), (t:Entity {{id: row.t}})
                     MERGE (s)-[r:`{rel.value}`]->(t)
                     SET r.chunk_ids = row.chunk_ids, r.evidence = row.evidence,
+                        r.status = row.status, r.years = row.years,
                         r.confidence = row.confidence""", rows=batch)
 
         counts = session.run("""

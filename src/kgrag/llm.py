@@ -1,9 +1,15 @@
-"""LLM provider layer: the pipeline calls generate_structured(); LLM_PROVIDER picks who answers.
+"""LLM provider layer: the pipeline calls generate_structured(); settings pick who answers.
 
-- gemini (default): Google Gemini API free tier. Rate limits are per project and not
-  published, so requests are paced, per-minute 429s slow the pacer down, and a per-day
-  429 raises QuotaExhausted so the run stops cleanly and resumes from cache later.
-- claude: Anthropic API (paid), kept so the provider can be switched back with one setting.
+Two roles, set separately: EXTRACTION_PROVIDER builds the graph (its cache is keyed by that
+model, so the graph keeps working when the answering model changes) and LLM_PROVIDER answers
+questions, routes them and labels groups.
+
+- gemini: Google Gemini API free tier (500 requests/day on Flash-Lite). Requests are paced,
+  per-minute 429s slow the pacer down, and a per-day 429 raises QuotaExhausted so the run
+  stops cleanly and resumes from cache later.
+- ollama: a local model through Ollama (free, unlimited, offline), structured output via
+  Ollama's JSON-schema `format`.
+- claude: Anthropic API (paid), kept so the provider can be switched with one setting.
 """
 
 import json
@@ -50,21 +56,64 @@ class Usage:
                 + self.cache_write_tokens * p_cw + self.cache_read_tokens * p_cr) / 1e6
 
 
-def model_name() -> str:
-    return settings.gemini_model if settings.llm_provider == "gemini" else settings.claude_model
+def model_name(provider: str | None = None) -> str:
+    provider = provider or settings.llm_provider
+    return {"gemini": settings.gemini_model, "ollama": settings.ollama_model,
+            "claude": settings.claude_model}[provider]
 
 
 def generate_structured(system: str, user: str, schema: type[BaseModel],
-                        light: bool = False) -> tuple[BaseModel, Usage]:
+                        light: bool = False, provider: str | None = None) -> tuple[BaseModel, Usage]:
     """Return a validated instance of `schema`. Raises LLMError (retryable) or QuotaExhausted.
 
     light=True: minimal reasoning, for cheap high-volume calls such as query routing.
+    provider: override LLM_PROVIDER (graph extraction passes EXTRACTION_PROVIDER).
     """
-    if settings.llm_provider == "gemini":
+    provider = provider or settings.llm_provider
+    if provider == "gemini":
         return _gemini(system, user, schema, light)
-    if settings.llm_provider == "claude":
+    if provider == "ollama":
+        return _ollama(system, user, schema, light)
+    if provider == "claude":
         return _claude(system, user, schema, light)
-    raise ValueError(f"Unknown LLM_PROVIDER: {settings.llm_provider!r}")
+    raise ValueError(f"Unknown LLM provider: {provider!r}")
+
+
+# ---------------------------------------------------------------- Ollama (local)
+
+OLLAMA_TIMEOUT_S = 600   # a long answer from an 8B model on a laptop GPU can take minutes
+
+
+def _ollama(system: str, user: str, schema: type[BaseModel], light: bool) -> tuple[BaseModel, Usage]:
+    import requests
+
+    body = {
+        "model": settings.ollama_model,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "format": schema.model_json_schema(),   # Ollama constrains the output to this JSON schema
+        "stream": False,
+        # OLLAMA_THINK=true lets the model reason before answering; "all" also covers light calls (routing).
+        "think": settings.ollama_think == "all" or (settings.ollama_think == "true" and not light),
+        "options": {"temperature": 0, "num_ctx": settings.ollama_num_ctx},
+    }
+    try:
+        r = requests.post(f"{settings.ollama_url}/api/chat", json=body, timeout=OLLAMA_TIMEOUT_S)
+    except requests.ConnectionError as e:
+        raise LLMError(f"Ollama is not reachable at {settings.ollama_url}; is it running?") from e
+    except requests.Timeout as e:
+        raise LLMError("Ollama request timed out") from e
+    if r.status_code == 404:
+        raise LLMError(f"Ollama model {settings.ollama_model!r} not found; run: ollama pull {settings.ollama_model}")
+    if r.status_code != 200:
+        raise LLMError(f"Ollama error {r.status_code}: {r.text[:200]}")
+    data = r.json()
+    usage = Usage(input_tokens=data.get("prompt_eval_count", 0), output_tokens=data.get("eval_count", 0))
+    if data.get("done_reason") == "length":
+        raise LLMError("finish_reason=length (raise OLLAMA_NUM_CTX)")
+    try:
+        return schema.model_validate_json(data["message"]["content"]), usage
+    except (ValidationError, KeyError) as e:
+        raise LLMError(f"schema validation failed: {e}") from e
 
 
 # ---------------------------------------------------------------- Gemini

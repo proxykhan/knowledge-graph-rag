@@ -17,7 +17,7 @@ def _extraction(relationships):
 
 def _rel(source, relation, target, evidence, confidence=0.9):
     return {"source": source, "source_type": "Company", "relation": relation, "target": target,
-            "target_type": "Company", "evidence": evidence, "confidence": confidence}
+            "target_type": "Company", "evidence": evidence, "confidence": confidence, "status": "current"}
 
 
 def test_valid_relationship_kept_with_chunk_id():
@@ -53,3 +53,12 @@ def test_unknown_entity_and_symmetric_ordering():
     assert result.rejected[0]["reason"] == "source or target missing from entities list"
     # COMPETES_WITH is symmetric: stored in alphabetical order so it exists once, not twice.
     assert result.relationships[0]["source"] == "Advanced Micro Devices, Inc."
+
+
+def test_completed_acquisition_is_never_past():
+    chunk = "Xilinx, until its acquisition by AMD in 2022."
+    ext = ChunkExtraction.model_validate({
+        "entities": [{"name": "AMD", "type": "Company"}, {"name": "Xilinx", "type": "Company"}],
+        "relationships": [{**_rel("AMD", "ACQUIRED", "Xilinx", "until its acquisition by AMD"), "status": "past"}],
+    })
+    assert validate(ext, "c1", chunk).relationships[0]["status"] == "current"

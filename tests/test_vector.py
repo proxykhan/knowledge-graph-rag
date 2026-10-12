@@ -8,7 +8,8 @@ CHUNK = {"ticker": "NVDA", "company": "NVIDIA CORP", "section_path": "10-K > Ite
 
 
 def test_header_names_the_company_the_chunk_calls_we():
-    assert passage_text(CHUNK, header=True).startswith("NVIDIA Corporation 10-K > Item 1 Business\n")
+    assert passage_text(CHUNK | {"report_date": "2026-01-25"}, header=True).startswith(
+        "NVIDIA Corporation FY2026 10-K > Item 1 Business\n")
     assert passage_text(CHUNK, header=False) == CHUNK["text"]
 
 

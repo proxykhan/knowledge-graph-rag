@@ -1,8 +1,9 @@
 """Download the latest 10-K filing for each ticker from SEC EDGAR.
 
 Usage:
-    python -m kgrag.ingest.edgar                 # all tickers in companies.py
-    python -m kgrag.ingest.edgar NVDA AMD INTC   # just these
+    python -m kgrag.ingest.edgar                         # latest 10-K of every ticker in companies.py
+    python -m kgrag.ingest.edgar NVDA AMD INTC           # just these
+    python -m kgrag.ingest.edgar --years 2 NVDA AMD      # latest two 10-Ks of each
 
 SEC rules: identify yourself with a User-Agent (SEC_USER_AGENT in .env) and stay
 under 10 requests/second. Files land in data/raw/ and are skipped if already present.
@@ -44,20 +45,22 @@ class EdgarClient:
         data = self.get(TICKER_MAP_URL).json()
         return {row["ticker"].upper(): (row["cik_str"], row["title"]) for row in data.values()}
 
-    def latest_10k(self, cik: int) -> dict | None:
+    def annual_reports(self, cik: int, years: int = 1) -> list[dict]:
+        """The `years` most recent 10-K filings, newest first (amendments excluded)."""
         recent = self.get(SUBMISSIONS_URL.format(cik=cik)).json()["filings"]["recent"]
+        out = []
         for i, form in enumerate(recent["form"]):
-            if form == "10-K":
-                return {
+            if form == "10-K" and len(out) < years:
+                out.append({
                     "accession": recent["accessionNumber"][i],
                     "filing_date": recent["filingDate"][i],
                     "report_date": recent["reportDate"][i],
                     "primary_document": recent["primaryDocument"][i],
-                }
-        return None
+                })
+        return out
 
 
-def download(tickers: list[str]) -> None:
+def download(tickers: list[str], years: int = 1) -> None:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     client = EdgarClient(settings.sec_user_agent)
     cik_map = client.ticker_to_cik()
@@ -68,28 +71,33 @@ def download(tickers: list[str]) -> None:
             print(f"[skip] {ticker}: not in SEC ticker map")
             continue
         cik, company = cik_map[ticker]
-        filing = client.latest_10k(cik)
-        if filing is None:
+        filings = client.annual_reports(cik, years)
+        if not filings:
             print(f"[skip] {ticker}: no 10-K found (foreign filers use 20-F)")
             continue
 
-        doc_id = f"{ticker}-10K-{filing['report_date']}"
-        html_path = RAW_DIR / f"{doc_id}.htm"
-        meta_path = RAW_DIR / f"{doc_id}.json"
-        if html_path.exists() and meta_path.exists():
-            print(f"[cached] {doc_id}")
-            continue
+        for filing in filings:
+            doc_id = f"{ticker}-10K-{filing['report_date']}"
+            html_path = RAW_DIR / f"{doc_id}.htm"
+            meta_path = RAW_DIR / f"{doc_id}.json"
+            if html_path.exists() and meta_path.exists():
+                print(f"[cached] {doc_id}")
+                continue
 
-        url = ARCHIVE_URL.format(
-            cik=cik,
-            accession=filing["accession"].replace("-", ""),
-            document=filing["primary_document"],
-        )
-        html_path.write_bytes(client.get(url).content)
-        meta = {"doc_id": doc_id, "ticker": ticker, "company": company, "cik": cik, "url": url, **filing}
-        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
-        print(f"[ok] {doc_id}  ({html_path.stat().st_size / 1e6:.1f} MB)")
+            url = ARCHIVE_URL.format(
+                cik=cik,
+                accession=filing["accession"].replace("-", ""),
+                document=filing["primary_document"],
+            )
+            html_path.write_bytes(client.get(url).content)
+            meta = {"doc_id": doc_id, "ticker": ticker, "company": company, "cik": cik, "url": url, **filing}
+            meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+            print(f"[ok] {doc_id}  ({html_path.stat().st_size / 1e6:.1f} MB)")
 
 
 if __name__ == "__main__":
-    download(sys.argv[1:] or TICKERS)
+    args = sys.argv[1:]
+    n_years = 1
+    if args[:1] == ["--years"]:
+        n_years, args = int(args[1]), args[2:]
+    download(args or TICKERS, n_years)

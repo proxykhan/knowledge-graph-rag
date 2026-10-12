@@ -60,3 +60,20 @@ def test_official_filer_name_is_canonical():
     clusters = _resolve({"Company": ["Nvidia Corporation", "Nvidia Corporation", "NVIDIA Corporation"]})
     (entity,) = clusters.values()
     assert entity["name"] == "NVIDIA Corporation"
+
+
+def test_fact_status_comes_from_latest_report_and_hedged_quotes_go_last():
+    from kgrag.graph.load import summarize_fact
+
+    fact = {"s": "x", "t": "y", "rel": "SUBSIDIARY_OF", "mentions": {
+        "a": {"chunk_id": "a", "evidence": "Altera, our wholly owned subsidiary", "status": "current",
+              "confidence": 0.9, "report_date": "2024-12-28"},
+        "b": {"chunk_id": "b", "evidence": "If needed, we would sell Altera", "status": "planned",
+              "confidence": 0.9, "report_date": "2025-12-27"},
+        "c": {"chunk_id": "c", "evidence": "We sold 51% of Altera", "status": "past",
+              "confidence": 0.8, "report_date": "2025-12-27"},
+    }}
+    edge = summarize_fact(fact)
+    assert edge["status"] == "past" and edge["years"] == [2024, 2025]
+    assert edge["evidence"][0] == "We sold 51% of Altera"   # latest report, not hedged
+    assert edge["chunk_ids"] == ["c", "b", "a"]

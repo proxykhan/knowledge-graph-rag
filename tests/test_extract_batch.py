@@ -9,7 +9,8 @@ ENTS = [{"name": "NVIDIA Corporation", "type": "Company"},
         {"name": "Taiwan Semiconductor Manufacturing Company Limited", "type": "Company"}]
 TSMC_REL = {"source": "Taiwan Semiconductor Manufacturing Company Limited", "source_type": "Company",
             "relation": "SUPPLIES", "target": "NVIDIA Corporation", "target_type": "Company",
-            "evidence": "Taiwan Semiconductor Manufacturing Company Limited makes our wafers.", "confidence": 0.95}
+            "evidence": "Taiwan Semiconductor Manufacturing Company Limited makes our wafers.", "confidence": 0.95,
+            "status": "current"}
 
 
 def test_fact_attributed_to_wrong_excerpt_is_moved_with_its_entities():

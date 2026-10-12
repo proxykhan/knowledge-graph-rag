@@ -6,7 +6,7 @@ key, so old cached extractions are not silently mixed with new ones.
 
 from kgrag.ontology import ALLOWED_RELATIONS, EntityType
 
-PROMPT_VERSION = "v3"
+PROMPT_VERSION = "v4"
 
 _ENTITY_GUIDE = {
     EntityType.COMPANY: "Corporations, including subsidiaries, customers, suppliers, foundries, competitors.",
@@ -47,13 +47,19 @@ Rules:
    Reporting segments and business units ("Semiconductor Systems segment", "Client Computing Group") are not Products.
 9. Risk-factor hypotheticals ("if a supplier fails...") are not relationships unless a specific named entity is involved.
 10. If an excerpt contains no extractable facts, return empty lists for it.
-11. You may receive several numbered excerpts. Return one entry per excerpt with its excerpt_id.
+11. status, as of the report date given in the request:
+    - current: true at the report date ("we utilize TSMC", "Mobileye, our majority-owned subsidiary").
+    - past: ended before the report date ("we sold 51% of Altera", "Mr. Hill was previously CFO of Intel",
+      "we no longer use"). A completed acquisition stays current: the buyer still acquired it.
+    - planned: announced, agreed or expected but not yet in effect ("agreed to acquire", "expect to shift
+      manufacturing to TSMC", "if needed, we would"). Hypotheticals about named entities are planned.
+12. You may receive several numbered excerpts. Return one entry per excerpt with its excerpt_id.
     Each fact belongs to the excerpt its evidence quote is copied from. List each excerpt's entities in that excerpt's entry."""
 
 
 def user_message(company: str, chunks: list[dict]) -> str:
-    """chunks: dicts with section_path and text, numbered 1..n in the message."""
-    parts = [f"Filing company: {company}"]
+    """chunks: dicts with section_path, report_date and text, numbered 1..n in the message."""
+    parts = [f"Filing company: {company}\nReport date (fiscal year end): {chunks[0].get('report_date', 'unknown')}"]
     for i, c in enumerate(chunks, 1):
         parts.append(f'<excerpt id="{i}" section="{c["section_path"]}">\n{c["text"]}\n</excerpt>')
     return "\n\n".join(parts)

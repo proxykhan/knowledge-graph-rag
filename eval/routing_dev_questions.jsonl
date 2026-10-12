@@ -12,3 +12,8 @@
 {"id": "d12", "question": "Which technologies do Intel, AMD and NVIDIA all use?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS", "hops": ["USES_TECHNOLOGY/out"]}
 {"id": "d13", "question": "Which competitors do Micron and Intel have in common?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS", "hops": ["COMPETES_WITH/any"]}
 {"id": "d14", "question": "How much did NVIDIA pay to acquire Mellanox?", "route": "VECTOR", "query_type": "NONE"}
+{"id": "d15", "question": "Which of AMD's competitors does Intel list as partners?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS", "hops": ["COMPETES_WITH/any", "PARTNERS_WITH/any"]}
+{"id": "d16", "question": "Which of Marvell's competitors are also Broadcom's competitors?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS", "hops": ["COMPETES_WITH/any"]}
+{"id": "d17", "question": "Which customers do Applied Materials and Lam Research have in common?", "route": "GRAPH", "query_type": "SHARED_NEIGHBORS", "hops": ["SUPPLIES/out"]}
+{"id": "d18", "question": "How did Intel's subsidiaries change between its last two annual reports?", "route": "GRAPH", "query_type": "RELATIONS_OF", "hops": ["SUBSIDIARY_OF/in"]}
+{"id": "d19", "question": "Which suppliers did NVIDIA mention in its earlier report but not in its latest one?", "route": "GRAPH", "query_type": "RELATIONS_OF", "hops": ["SUPPLIES/in"]}
