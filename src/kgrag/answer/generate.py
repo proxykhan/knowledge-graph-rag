@@ -11,12 +11,14 @@ fail are dropped and reported rather than shown, so every citation in the final 
 resolves to a chunk that was actually retrieved.
 """
 
+import functools
 import hashlib
 import json
 import re
 import sys
 import time
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
@@ -44,7 +46,13 @@ Rules:
 3. Use no outside knowledge. If the context does not answer the question, set answerable to false
    and return no claims. Do not guess.
 4. Put the direct answer to the question first, then supporting detail.
-5. When combining facts across hops (A supplies B, B competes with C), cite every fact used."""
+5. When combining facts across hops (A supplies B, B competes with C), cite every fact used.
+6. Change over time: graph facts say which fiscal years' reports mention them ("[reported in FY2024,
+   FY2025]") and whether they ended or are only planned. To say what changed, compare those: a fact
+   marked ended, or reported in an earlier year but not the latest, has changed; name the years.
+7. Group overviews: lines marked "[group, not citable]" describe groups of companies. Write one claim
+   per group: what its members have in common and 3 to 5 key members, citing that group's supporting
+   facts (never the group line itself)."""
 
 
 class Claim(BaseModel):
@@ -135,13 +143,26 @@ def _render_claims(claims: list[Claim], ctx: Context) -> tuple[str, list[dict]]:
 ANSWER_CACHE = CACHE_DIR / "answers"
 
 
+@functools.lru_cache(maxsize=1)
+def _code_fingerprint() -> str:
+    """Hash of the retrieval and answer source files, computed once per process."""
+    package = Path(__file__).resolve().parents[1]
+    files = sorted((package / "answer").glob("*.py")) + sorted((package / "retrieval").glob("*.py"))
+    return hashlib.sha256(b"".join(f.read_bytes() for f in files)).hexdigest()[:12]
+
+
 def _cache_key(question: str, mode: str) -> str:
     """Everything that can change an answer is in the key, so a cached answer can never
     outlive the router, prompt, model or graph build that produced it."""
     entities = PROCESSED_DIR / "entities.json"
     graph_build = int(entities.stat().st_mtime) if entities.exists() else 0
+    groups = PROCESSED_DIR / "communities.json"
+    groups_build = int(groups.stat().st_mtime) if groups.exists() else 0
+    # Prompt texts and the answering code itself, not just version labels: an edited instruction
+    # or a changed context builder must never serve a stale answer.
+    prompts = hashlib.sha256((SYSTEM_PROMPT + router.SYSTEM_PROMPT).encode("utf-8")).hexdigest()[:12]
     parts = [" ".join(question.lower().split()), mode, router.ROUTER_VERSION, PROMPT_VERSION,
-             llm.model_name(), str(graph_build)]
+             llm.model_name(), str(graph_build), str(groups_build), prompts, _code_fingerprint()]
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:24]
 
 

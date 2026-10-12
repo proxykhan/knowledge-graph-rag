@@ -101,3 +101,11 @@ def test_rate_limiter_blocks_after_the_limit_and_zero_disables():
     assert [limited.allow("1.2.3.4") for _ in range(3)] == [True, True, False]
     assert limited.allow("5.6.7.8")                      # other visitors unaffected
     assert all(RateLimiter(0, 0).allow("x") for _ in range(50))
+
+
+def test_cache_key_changes_when_the_answer_prompt_changes(monkeypatch):
+    from kgrag.answer import generate
+
+    before = generate._cache_key("Who supplies NVIDIA?", "hybrid")
+    monkeypatch.setattr(generate, "SYSTEM_PROMPT", generate.SYSTEM_PROMPT + "\n8. A new rule.")
+    assert generate._cache_key("Who supplies NVIDIA?", "hybrid") != before

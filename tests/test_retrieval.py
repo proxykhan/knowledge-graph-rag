@@ -112,3 +112,20 @@ def test_community_detection_separates_dense_groups():
     gpus = [link(x, y) for x, y in [("nvda", "amd"), ("nvda", "intel"), ("amd", "intel"), ("nvda", "qcom")]]
     groups = detect(memory + gpus + [link("hynix", "nvda")])   # one bridge between the clusters
     assert {"mu", "samsung", "hynix", "kioxia"} in groups and {"nvda", "amd", "intel", "qcom"} in groups
+
+
+def test_time_question_chain_of_one_relation_becomes_a_lookup():
+    from kgrag.retrieval.retriever import normalize_time_question
+
+    repeated = _decision(query_type="CHAIN", entities=["Intel"],
+                         hops=[{"relation": "SUBSIDIARY_OF", "direction": "in"},
+                               {"relation": "SUBSIDIARY_OF", "direction": "out"}])
+    fixed, note = normalize_time_question("How did Intel's subsidiaries change between its reports?", repeated)
+    assert fixed.query_type == "RELATIONS_OF" and len(fixed.hops) == 1 and note
+
+    # A genuine chain (two different relationships) is left alone, even in a time question.
+    real_chain = _decision(query_type="CHAIN", hops=[{"relation": "COMPETES_WITH", "direction": "any"},
+                                                     {"relation": "SUPPLIES", "direction": "in"}])
+    assert normalize_time_question("How did suppliers of NVIDIA's rivals change?", real_chain)[0] is real_chain
+    # Not a time question: untouched.
+    assert normalize_time_question("Who owns the parent of Mobileye?", repeated)[0] is repeated

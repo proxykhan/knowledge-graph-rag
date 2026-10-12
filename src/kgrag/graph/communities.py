@@ -12,6 +12,7 @@ summary, are what answers cite. Writes data/processed/communities.json and sets
 """
 
 import json
+import re
 from collections import Counter
 
 import networkx as nx
@@ -30,13 +31,24 @@ OUT = PROCESSED_DIR / "communities.json"
 
 
 class GroupLabel(BaseModel):
-    label: str = Field(description="3-6 word name for the group, e.g. 'AI accelerator competitors'")
-    summary: str = Field(description="Two sentences: what ties these companies together, using only the facts given")
+    label: str = Field(description="2-6 words naming what the members make or do, e.g. 'Radio chips for phones'")
+    summary: str = Field(description="Two sentences naming the 3-5 most connected members and what links them, "
+                                     "using only the facts given")
 
 
 SYSTEM = """You label groups of companies found in SEC 10-K filings.
-Given the members of one group and the facts linking them, write a short label and a two-sentence
-summary of what ties them together. Use only the facts given; do not add outside knowledge."""
+Given the members of one group and the facts linking them, write a label and a two-sentence summary.
+
+The label names the business area the members share: what they make, sell or do. Good labels:
+"Memory chips and chipmaking equipment", "Radio-frequency chips for phones", "Car and industrial chips",
+"AI data-center platforms". Bad labels describe the links instead of the business ("Competitors and
+suppliers", "... in the semiconductor industry", "... ecosystem") or name only one company.
+The summary names the 3-5 most connected members and what links them.
+Use only the facts given; do not add outside knowledge."""
+
+# Words that make a label describe the links rather than the business; a label using them is retried once.
+GENERIC = re.compile(r"\b(competitors?|acquirers?|subsidiar(y|ies)|partners?|suppliers?|entities|"
+                     r"ecosystem|semiconductor industry|companies)\b", re.IGNORECASE)
 
 
 def fetch_edges(driver) -> list[dict]:
@@ -79,6 +91,10 @@ def main() -> None:
                       + "\n".join("- " + statement(f) for f in facts))
             try:
                 label, _ = llm.generate_structured(SYSTEM, prompt, GroupLabel, light=True)
+                if GENERIC.search(label.label):
+                    retry = (prompt + f"\n\nYour label {label.label!r} describes the links, not the business. "
+                             "Name what these companies make or do instead.")
+                    label, _ = llm.generate_structured(SYSTEM, retry, GroupLabel, light=True)
                 label_text, summary = label.label, label.summary
             except (llm.LLMError, llm.QuotaExhausted) as e:
                 label_text, summary = f"Group {i + 1}", f"(label unavailable: {e})"

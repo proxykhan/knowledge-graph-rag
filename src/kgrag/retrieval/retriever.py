@@ -13,6 +13,7 @@ Flow:
 """
 
 import json
+import re
 import sys
 import time
 from itertools import combinations
@@ -80,15 +81,16 @@ def build_graph_query(decision: router.RouterDecision, links: list[Link]) -> tup
 
 
 FACTS_PER_GROUP_IN_CONTEXT = 3
+GROUPS_IN_CONTEXT = 8   # 8 x 3 facts stays under the context's 25-fact cap, so no group loses its facts
 
 
 def overview_rows() -> list[dict]:
-    """Corpus-level questions: one row per company group, with its label and summary (context
-    only, written by an LLM) and a few of its strongest facts (citable, from the filings)."""
+    """Corpus-level questions: one row per company group (largest first), with its label and
+    summary (context only, written by an LLM) and a few of its strongest facts (citable)."""
     path = PROCESSED_DIR / "communities.json"
     if not path.exists():
         return []
-    groups = json.loads(path.read_text(encoding="utf-8"))
+    groups = json.loads(path.read_text(encoding="utf-8"))[:GROUPS_IN_CONTEXT]
     return [{"group": g["label"], "summary": g["summary"], "members": [m["name"] for m in g["members"]],
              "edges": g["facts"][:FACTS_PER_GROUP_IN_CONTEXT]} for g in groups]
 
@@ -119,6 +121,29 @@ def _vector(question: str) -> list[Passage]:
         return search(conn, embed.embed_query(question), k=VECTOR_K, ef_search=EF_SEARCH)
 
 
+TIME_QUESTION = re.compile(
+    r"\b(chang(e|ed|es|ing)|no longer|stopped|dropped|added|former(ly)?|over time|earlier report|"
+    r"latest report|previous report|between (its|their|the) .{0,40}reports?)\b", re.IGNORECASE)
+
+
+def normalize_time_question(question: str, decision: router.RouterDecision
+                            ) -> tuple[router.RouterDecision, str | None]:
+    """Change-over-time questions need one lookup, not a chain.
+
+    Graph facts already carry the fiscal years whose reports mention them and whether they
+    ended, so "how did Intel's subsidiaries change" is SUBSIDIARY_OF/in plus those labels.
+    Small routers tend to turn it into a chain that repeats one relationship
+    (SUBSIDIARY_OF/in -> SUBSIDIARY_OF/out), which matches nothing. Only that shape is
+    rewritten; genuine chains mix relationships and are left alone.
+    """
+    if (decision.route == router.Route.GRAPH and decision.query_type == QueryType.CHAIN
+            and len(decision.hops) > 1 and len({h.relation for h in decision.hops}) == 1
+            and TIME_QUESTION.search(question)):
+        fixed = decision.model_copy(update={"query_type": QueryType.RELATIONS_OF, "hops": decision.hops[:1]})
+        return fixed, "change-over-time question: repeated-relation chain read as one lookup"
+    return decision, None
+
+
 def retrieve(question: str) -> RetrievalResult:
     start = time.perf_counter()
     usage = llm.Usage()
@@ -130,12 +155,18 @@ def retrieve(question: str) -> RetrievalResult:
         decision = None
         result = RetrievalResult(question, "VECTOR", None, notes=[f"router failed ({e}); vector only"])
 
+    time_note = None
+    if decision is not None:
+        decision, time_note = normalize_time_question(question, decision)
+
     if decision is not None:
         confident = decision.confidence >= router.CONFIDENCE_THRESHOLD
         want_graph = decision.route == router.Route.GRAPH or not confident
         want_vector = decision.route == router.Route.VECTOR or not confident
         result = RetrievalResult(question, "BOTH" if want_graph and want_vector else
                                  "GRAPH" if want_graph else "VECTOR", decision.model_dump(mode="json"))
+        if time_note:
+            result.notes.append(time_note)
         if not confident:
             result.notes.append(f"confidence {decision.confidence:.2f} < {router.CONFIDENCE_THRESHOLD}: running both")
 

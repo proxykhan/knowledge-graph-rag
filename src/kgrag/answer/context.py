@@ -98,8 +98,11 @@ def build_context(result: RetrievalResult) -> Context:
     for row in result.graph_rows:
         ids = [sid for sid in (add_edge(e) for e in row["edges"]) if sid]
         if "group" in row:  # OVERVIEW: an LLM-written group label; answers must cite the facts, not this
-            summaries.append(f"[group, not citable] {row['group']}: {row['summary']} Members: "
-                             f"{', '.join(row['members'][:12])}. Supporting facts: {', '.join(ids)}.")
+            # Members are ordered by how connected they are; the top 5 are the group's core, and
+            # longer lists invite the model to name peripheral links (a lender, a university).
+            summaries.append(f"[group, not citable] {row['group']}: {row['summary']} Key members: "
+                             f"{', '.join(row['members'][:5])} ({len(row['members'])} companies in total). "
+                             f"Supporting facts: {', '.join(ids)}.")
         if "count" in row:  # COUNT template: an aggregate over the edges listed with it
             summaries.append(f"[graph aggregate] {row['entity']} has {row['count']} such relationships "
                              f"in the graph (see {', '.join(ids[:10])}).")

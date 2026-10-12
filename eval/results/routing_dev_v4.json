@@ -4,13 +4,14 @@
     "router_version": "v4",
     "n": 19,
     "route_accuracy": 1.0,
-    "route_and_query_type_accuracy": 0.9473684210526315,
+    "route_and_query_type_accuracy": 1.0,
     "hops_correct": "16/18",
     "graph_questions_with_rows": "15/18",
-    "rescued_by_direction_retry": 2,
+    "rescued_by_direction_retry": 1,
     "route_used": {
-      "GRAPH": 15,
-      "VECTOR": 4
+      "GRAPH": 14,
+      "VECTOR": 4,
+      "BOTH": 1
     }
   },
   "rows": [
@@ -28,7 +29,7 @@
         "SUPPLIES/out"
       ],
       "hops_ok": true,
-      "confidence": 1.0,
+      "confidence": 0.95,
       "route_used": "GRAPH",
       "graph_rows": 6,
       "direction_reversed": false,
@@ -67,16 +68,14 @@
         "SUBSIDIARY_OF/in"
       ],
       "hops": [
-        "SUBSIDIARY_OF/out"
+        "SUBSIDIARY_OF/in"
       ],
-      "hops_ok": false,
+      "hops_ok": true,
       "confidence": 0.95,
       "route_used": "GRAPH",
       "graph_rows": 6,
-      "direction_reversed": true,
-      "notes": [
-        "no rows as read; found facts with reversed hop 1"
-      ],
+      "direction_reversed": false,
+      "notes": [],
       "unlinked": []
     },
     {
@@ -90,7 +89,7 @@
         "SUBSIDIARY_OF/out"
       ],
       "hops": [
-        "ACQUIRED/in"
+        "SUBSIDIARY_OF/in"
       ],
       "hops_ok": false,
       "confidence": 0.95,
@@ -116,7 +115,7 @@
         "ACQUIRED/in"
       ],
       "hops_ok": true,
-      "confidence": 1.0,
+      "confidence": 0.95,
       "route_used": "GRAPH",
       "graph_rows": 1,
       "direction_reversed": false,
@@ -226,12 +225,12 @@
       ],
       "hops": [
         "SUBSIDIARY_OF/out",
-        "SERVES_MARKET/out"
+        "OPERATES_IN/out"
       ],
-      "hops_ok": true,
+      "hops_ok": false,
       "confidence": 0.95,
       "route_used": "GRAPH",
-      "graph_rows": 7,
+      "graph_rows": 16,
       "direction_reversed": false,
       "notes": [],
       "unlinked": []
@@ -313,7 +312,7 @@
       "expected_hops": null,
       "hops": [],
       "hops_ok": null,
-      "confidence": 0.95,
+      "confidence": 0.9,
       "route_used": "VECTOR",
       "graph_rows": 0,
       "direction_reversed": false,
@@ -354,6 +353,7 @@
         "COMPETES_WITH/any"
       ],
       "hops": [
+        "COMPETES_WITH/any",
         "COMPETES_WITH/any"
       ],
       "hops_ok": true,
@@ -407,7 +407,9 @@
       "route_used": "GRAPH",
       "graph_rows": 6,
       "direction_reversed": false,
-      "notes": [],
+      "notes": [
+        "change-over-time question: repeated-relation chain read as one lookup"
+      ],
       "unlinked": []
     },
     {
@@ -416,7 +418,7 @@
       "expected_route": "GRAPH",
       "route": "GRAPH",
       "expected_query_type": "RELATIONS_OF",
-      "query_type": "COUNT",
+      "query_type": "RELATIONS_OF",
       "expected_hops": [
         "SUPPLIES/in"
       ],
@@ -424,11 +426,14 @@
         "SUPPLIES/in"
       ],
       "hops_ok": true,
-      "confidence": 0.7,
-      "route_used": "GRAPH",
-      "graph_rows": 1,
+      "confidence": 0.5,
+      "route_used": "BOTH",
+      "graph_rows": 7,
       "direction_reversed": false,
-      "notes": [],
+      "notes": [
+        "change-over-time question: repeated-relation chain read as one lookup",
+        "confidence 0.50 < 0.7: running both"
+      ],
       "unlinked": []
     }
   ]
